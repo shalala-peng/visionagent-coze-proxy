@@ -928,6 +928,7 @@ const COZE_PROXY_URL="https://1466923365-czw28jkc4f.ap-guangzhou.tencentscf.com"
 async function generate(){
   const text=document.getElementById("prompt").value.trim();
   if(!text){alert("请先描述你想搭建的视觉内容智能体 🙂");return;}
+  window.lastUserPrompt=text;
   document.querySelectorAll("#steps .step").forEach(s=>s.classList.remove("done"));
   const seq=["intent","skill","plan","render"];let i=0;
   const tick=setInterval(()=>{document.querySelector(`#steps .step[data-k="${seq[i]}"]`).classList.add("done");i++;if(i>=seq.length)clearInterval(tick);},500);
@@ -1045,8 +1046,8 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
       await sleep(400);
       ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
       setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
-      const matHint=selectedAssets.length?("，输入素材："+selectedAssets.join("、")):"";
-      const imgUrl=await fetchRealImage((wf.lineName||"")+"，"+(n.title||"")+"，"+(n.desc||"")+matHint);
+      const imgPrompt=buildImagePrompt(n,wf,order,i);
+      const imgUrl=await fetchRealImage(imgPrompt);
       if(imgUrl){ctx.imgUrl=imgUrl;ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → AI 出图完成");}
       else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
       if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
@@ -1081,6 +1082,38 @@ async function fetchRealImage(prompt){
   }catch(e){return null;}
 }
 function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
+/* 为图像生成节点构造高质量中文 prompt：融合用户原始需求、节点角色、参数、前置步骤 */
+function buildImagePrompt(node,wf,order,idx){
+  const userNeed=(window.lastUserPrompt||wf.lineName||"").trim();
+  const role=(node.skill||node.title||"").trim();
+  const params=node.params||{};
+  const paramTxt=Object.entries(params).filter(([k,v])=>v!==undefined&&v!==null&&v!=="").map(([k,v])=>`${k}=${v}`).join("，");
+
+  // 前置已执行节点带来的语义
+  const prevIds=(order||[]).slice(0,idx||0);
+  const prevSkills=new Set();
+  prevIds.forEach(id=>{const nn=(wf.nodes||[]).find(x=>x.id===id);if(nn&&nn.skill)prevSkills.add(nn.skill);});
+  let upstream="";
+  if(prevSkills.has("智能抠图")||prevSkills.has("抠图"))upstream+="前置「智能抠图」已完成，商品主体已抠出，生成时请把商品主体自然融入场景，不要改变或遮挡主体。";
+  if(prevSkills.has("AI调色"))upstream+="前置「AI调色」已完成，请保持当前整体色调风格。";
+
+  // 根据节点类型给出强化指令
+  let roleHint="";
+  if(/场景生成/i.test(role))roleHint="当前步骤是「场景生成」：请生成一张可作为电商产品背景/使用场景的图片，画面必须紧扣用户需求，不要出现与需求无关的复杂元素或工业场景。";
+  else if(/AI调色|调色/i.test(role))roleHint="当前步骤是「AI调色」：请对画面进行调色，生成一张整体色调符合参数要求的图片，保持主体内容与构图不变。";
+  else if(/抠图/i.test(role))roleHint="当前步骤是「智能抠图」：请生成一张展示商品主体被完整抠出、背景为透明或纯白的示意图。";
+  else roleHint="当前步骤是「"+role+"」：请生成一张严格符合用户需求的图片。";
+
+  const assetHint=selectedAssets.length?`输入/参考素材：${selectedAssets.join("、")}。`:"";
+
+  let prompt=`根据以下用户需求生成一张高清、无水印、适合电商/营销使用的图片。用户需求：${userNeed}。`;
+  prompt+=`当前生产步骤：${role}${paramTxt?"（参数："+paramTxt+"）":""}。`;
+  prompt+=roleHint;
+  prompt+=upstream;
+  prompt+=assetHint;
+  prompt+="要求：画面主体明确、风格一致、构图合理、光线自然、画质高清，不要出现与用户需求无关的元素。";
+  return prompt;
+}
 async function startRun(){
   if(!currentWF){alert("请先在「生产线」页生成工作流，再点运行");return;}
   if(runState.running){alert("已有流程在运行或等待审片，请先处理");return;}
