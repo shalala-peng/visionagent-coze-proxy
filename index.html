@@ -238,7 +238,7 @@
         <option value="member">角色：成员</option>
         <option value="viewer">角色：只读</option>
       </select>
-      <div class="tag-demo">已接入 Coze 真实智能体 · 网络受限时自动降级演示 · 失败请关闭梯子或用 start-local.bat</div>
+      <div class="tag-demo">支持多模型切换（扣子 / DeepSeek / 通义 / 智谱 / Kimi / GPT）· 下方「底层模型」可切换 · 网络受限自动降级</div>
     </div>
 
     <!-- HOME -->
@@ -291,6 +291,18 @@
               <span id="linesAssetText" style="font-size:12px;color:var(--primary-d);font-weight:500"></span>
               <span id="linesAssetThumbs" style="display:flex;gap:6px;align-items:center"></span>
             </div>
+          </div>
+          <div class="model-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+            <label style="font-size:13px;color:var(--muted)">底层模型</label>
+            <select id="modelSelect" onchange="onModelChange()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--card)">
+              <option value="coze">扣子视觉智能体（最强看图）</option>
+              <option value="deepseek">DeepSeek（低成本编排）</option>
+              <option value="qwen">通义千问 Qwen</option>
+              <option value="glm">智谱 GLM-4V（可看图）</option>
+              <option value="kimi">Kimi</option>
+              <option value="openai">OpenAI GPT-4o</option>
+            </select>
+            <span id="modelNote" style="font-size:12px;color:var(--muted)"></span>
           </div>
           <textarea id="prompt" placeholder="例如：帮我搭一条商品图生产线，原图进来先分类，再智能抠图，按抖音规范调色，用 AIGC 补场景，合规不过就打回重做，最后发到各平台"></textarea>
           <div class="chips" id="chips"></div>
@@ -1001,6 +1013,10 @@ function extractFront(text){
   if(s>=0&&e>=0)t=t.slice(s,e+1);return JSON.parse(t);
 }
 const COZE_PROXY_URL="https://1466923365-czw28jkc4f.ap-guangzhou.tencentscf.com"; /* 腾讯云 SCF 函数 URL（国内云函数代理，代持 COZE_API_KEY 真调 Coze），大陆浏览器可真调，告别 Failed to fetch。改完需重新部署 CloudStudio 生效。 */
+/* 前端模型选择：用户可切换底层大模型，选择经 body.llmProvider 传给云函数（覆盖环境变量默认） */
+let currentModel="coze";
+function onModelChange(){const v=document.getElementById("modelSelect").value;currentModel=v;try{localStorage.setItem("va_model",v);}catch(_){}updateModelNote();}
+function updateModelNote(){const notes={coze:"Coze 视觉 bot 亲眼看素材（最强看图）",deepseek:"纯文本编排，看图需配 VISION_*（如智谱 GLM-4V）",qwen:"纯文本编排",glm:"GLM-4V 自带视觉，素材被看见",kimi:"纯文本，看图需配 VISION_*",openai:"GPT-4o 自带视觉，素材被看见"};const el=document.getElementById("modelNote");if(el)el.textContent=notes[currentModel]||"";}
 async function generate(){
   const text=document.getElementById("prompt").value.trim();
   if(!text){alert("请先描述你想搭建的视觉内容智能体 🙂");return;}
@@ -1013,7 +1029,7 @@ async function generate(){
   try{
     if(COZE_PROXY_URL){
       const imgList=selectedAssetUrls.filter(Boolean);
-      const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:text,images:imgList.length?imgList:undefined})});
+      const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:text,images:imgList.length?imgList:undefined,llmProvider:currentModel})});
       let data={};try{data=await res.json();}catch(_){}
       if(res.ok&&data&&!data.error){obj=data.json||(data.text?extractFront(data.text):null);mockTag=!!data.mock;source="coze";}
     }
@@ -1402,6 +1418,8 @@ function loadState(){
 
 /* init */
 loadState();
+try{const m=localStorage.getItem("va_model");if(m)currentModel=m;}catch(_){}
+const _ms=document.getElementById("modelSelect");if(_ms)_ms.value=currentModel;updateModelNote();
 renderSkillLib();
 renderReview();
 renderRuns();
