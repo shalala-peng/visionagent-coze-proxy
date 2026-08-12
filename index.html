@@ -80,6 +80,8 @@
   .run-status{font-size:12px;color:var(--teal);font-weight:600;margin-left:4px}
   .run-status.busy{color:var(--primary)}
   .run-status.warn{color:var(--amber)}
+  .rev-img img,.rev-img{width:100%;height:280px;border-radius:10px;margin-bottom:12px;object-fit:cover}
+  .rev-thumb.has-img{background-size:cover;background-position:center}
   .prop{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
   .prop h3{font-size:14px;margin-bottom:4px}
   .prop .skill{font-size:12px;color:var(--teal);margin-bottom:12px}
@@ -393,6 +395,7 @@ height: int</textarea></div>
         <span class="fchip" data-f="视频">视频</span>
       </div>
       <div class="media" id="mediaGrid"></div>
+      <div class="hint" id="assetHint" style="margin-top:10px">点击素材卡片选中，用于「运行」时作为本次生产线的输入素材</div>
       <div class="hint" style="margin-top:16px">素材导入支持：本地拖拽上传、相机直传、网盘同步（演示入口，接入后素材库成为生产线的真实输入端）。</div>
     </section>
 
@@ -407,7 +410,7 @@ height: int</textarea></div>
       <div class="hint">交付管理：视觉内容团队追踪每条生产线的成片交付状态（客户审片 / 平台发布 / 内部使用）。状态由生产线节点的执行进度自动同步（如「合规审核」节点打回则标记为待重做）。待审片 / 已打回的项可一键跳转到「审片台」。</div>
       <div class="deliv">
         <table>
-          <thead><tr><th>客户 / 项目</th><th>类型</th><th>进度</th><th>状态</th><th>操作</th></tr></thead>
+          <thead><tr><th>客户 / 项目</th><th>类型</th><th>产出</th><th>进度</th><th>状态</th><th>操作</th></tr></thead>
           <tbody id="delivBody"></tbody>
         </table>
       </div>
@@ -427,6 +430,12 @@ height: int</textarea></div>
     <!-- RUNS -->
     <section class="view" id="view-runs">
       <div class="hint">运行记录：每条生产线历史的执行记录，含状态、耗时、消耗与节点级日志。对应 PRD 中的「评测体系」——跑真实数据、收集 Bad Case、反推优化（通过率 / 打回率 / 成本）。</div>
+      <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+        <div class="stat"><div class="n" id="rpOk">—</div><div class="l">运行成功率</div></div>
+        <div class="stat"><div class="n" id="rpRej">—</div><div class="l">打回重做率</div></div>
+        <div class="stat"><div class="n" id="rpDur">—</div><div class="l">平均耗时</div></div>
+        <div class="stat"><div class="n" id="rpCost">—</div><div class="l">累计消耗</div></div>
+      </div>
       <div class="runs-list" id="runsList"></div>
       <div class="run-detail" id="runDetail"></div>
     </section>
@@ -669,9 +678,27 @@ document.querySelectorAll(".subtab").forEach(t=>t.onclick=()=>{
 function renderSkillLib(){document.getElementById("skillGrid").innerHTML=SKILLS.map(s=>`
   <div class="skill"><span class="cat">${s.cat}</span><h4>${s.name}</h4><p>${s.desc}</p>
   <div class="io">输入：${s.in}<br>输出：${s.out}</div></div>`).join("");}
-function renderMedia(f){document.getElementById("mediaGrid").innerHTML=MEDIA.filter(m=>f==="all"||m.tp===f).map(m=>`
-  <div class="asset"><div class="thumb" style="background:${m.c}"></div>
-  <div class="meta"><div class="nm">${m.nm}</div><div class="sub">${m.tp} · ${m.sz}</div></div></div>`).join("");}
+let selectedAssets=[];
+function toggleAsset(i){
+  const m=MEDIA[i];
+  const idx=selectedAssets.indexOf(m.nm);
+  if(idx>=0)selectedAssets.splice(idx,1);else selectedAssets.push(m.nm);
+  const active=document.querySelector("#mediaFilters .fchip.active");
+  renderMedia(active?active.dataset.f:"all");
+}
+function renderMedia(f){
+  const list=MEDIA.filter(m=>f==="all"||m.tp===f);
+  document.getElementById("mediaGrid").innerHTML=list.map(m=>{
+    const sel=selectedAssets.indexOf(m.nm)>=0;
+    return `<div class="asset" style="cursor:pointer;${sel?'border:1.5px solid var(--primary)':''}" onclick="toggleAsset(${MEDIA.indexOf(m)})">
+    <div class="thumb" style="background:${m.c}"></div>
+    <div class="meta"><div class="nm">${m.nm}${sel?' ✓':''}</div><div class="sub">${m.tp} · ${m.sz}${sel?' · 已选':''}</div></div></div>`;
+  }).join("");
+  const hint=document.getElementById("assetHint");
+  if(hint)hint.innerHTML=selectedAssets.length
+    ?`已选 <b style="color:var(--primary-d)">${selectedAssets.length}</b> 个素材用于本次运行：${selectedAssets.join("、")}`
+    :`点击素材卡片选中，用于「运行」时作为本次生产线的输入素材`;
+}
 function renderTpl(){document.getElementById("tplGrid").innerHTML=TPLS.map(t=>`
   <div class="tpl"><h4>${t.nm}</h4><p>${t.desc}</p>
   <div class="tg">${t.tg.map(x=>`<span>${x}</span>`).join("")}</div>
@@ -679,18 +706,33 @@ function renderTpl(){document.getElementById("tplGrid").innerHTML=TPLS.map(t=>`
 function renderDeliv(){document.getElementById("delivBody").innerHTML=DELIV.map(d=>{
   const canReview=(d.s==="待客户审片"||d.s==="已打回重做");
   const act=canReview?`<button class="btn sm ghost" onclick="goView('review')">去审片</button>`:`<span style="font-size:12px;color:var(--muted)">—</span>`;
-  return `<tr><td>${d.c}</td><td>${d.t}</td>
+  const thumb=d.imgUrl?`<img src="${d.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;display:block" alt="成片">`:`<span style="font-size:11px;color:var(--muted)">—</span>`;
+  return `<tr><td>${d.c}</td><td>${d.t}</td><td>${thumb}</td>
   <td><span class="bar-mini"><i style="width:${d.p}%"></i></span> ${d.p}%</td>
   <td><span class="pill ${d.st}">${d.s}</span></td><td>${act}</td></tr>`;}).join("");}
-function useTpl(key){goLines(); const t=document.getElementById("prompt"); t.value="使用模板："+key;}
+function useTpl(key){
+  const t=TEMPLATES[key];
+  goView("lines");
+  if(!t){const p=document.getElementById("prompt");p.value="使用模板："+key;return;}
+  // 直接恢复已保存的画布数据（无需重新调 Coze）
+  currentTplName=key;
+  document.getElementById("wfMount").style.display="block";
+  renderWorkflow(key);
+  registerWF({lineName:key,reworkLoop:t.reworkLoop||{}},t,key);
+  const h=document.getElementById("resultHint");
+  h.textContent="已加载模板：「"+key+"」— 点「▶ 运行」执行，或修改后重新「存为模板」";
+  h.style.display="block";
+  setRunStatus("模板已加载 · 可编辑 / 运行","");
+}
 
 /* ============ 审片台 ============ */
 function renderReview(){document.getElementById("revList").innerHTML=REVIEW.map(r=>{
   const cls=r.s==="已通过"?"p-teal":r.s==="已打回重做"?"p-coral":"p-amber";
   const roundsInfo=(r.rounds&&r.rounds>1)?` · 第${r.rounds}轮`:"";
   const act=r.s==="已通过"?"已处理":(r.s==="已打回重做"?"查看原因":"点击审片");
+  const thumbStyle=r.imgUrl?`style="background-image:url('${r.imgUrl}');background-size:cover;background-position:center"`:`style="background:${r.c}"`;
   return `<div class="rev-item" onclick="openReview('${r.id}',this)">
-    <div class="rev-thumb" style="background:${r.c}"></div>
+    <div class="rev-thumb ${r.imgUrl?'has-img':''}" ${thumbStyle}></div>
     <div class="rev-meta"><div class="t">${r.t}${roundsInfo}</div><div class="s">${r.s} · ${act}</div></div>
     <span class="pill ${cls}">${r.s}</span>
   </div>`;}).join("");}
@@ -700,9 +742,11 @@ function openReview(id,el){
   if(el) el.classList.add("active");
   const roundsInfo=(r.rounds&&r.rounds>1)?` · <span style="color:var(--coral)">第 ${r.rounds} 轮</span>`:"";
   const statusPill=r.s==="已通过"?'<span class="pill p-teal">已通过</span>':r.s==="已打回重做"?'<span class="pill p-coral">已打回重做</span>':'<span class="pill p-amber">待审核</span>';
+  const imgStyle=r.imgUrl?`style="background-image:url('${r.imgUrl}');background-size:cover;background-position:center"`:`style="background:${r.c}"`;
+  const imgTag=r.imgUrl?'（AI 真实生成）':'（演示占位）';
   document.getElementById("revDetail").innerHTML=`
-    <div class="hint">${r.t}${roundsInfo} ${statusPill}</div>
-    <div class="rev-img" style="background:${r.c}"></div>
+    <div class="hint">${r.t}${roundsInfo} ${statusPill} <span style="font-size:11px;color:var(--muted)">${imgTag}</span></div>
+    <div class="rev-img" ${imgStyle}></div>
     <div style="font-size:12px;color:var(--muted)">需求 / 反馈：${r.req}</div>
     <textarea class="annot" placeholder="填写批注（如：第二张背景再虚化一点）"></textarea>
     <div class="rev-actions">
@@ -710,14 +754,31 @@ function openReview(id,el){
       <button class="btn danger edit-only" onclick="reviewReject('${r.id}')">↩ 打回重做</button>
     </div>`;
 }
-function renderRuns(){document.getElementById("runsList").innerHTML=RUNS.map(r=>`
+function renderRuns(){
+  document.getElementById("runsList").innerHTML=RUNS.map(r=>`
   <div class="run-row" onclick="openRun('${r.id}')">
     <span class="pill ${r.cls}">${r.st}</span>
     <span class="nm">${r.nm}</span>
     <span style="font-size:12px;color:var(--muted)">${r.time}</span>
     <span style="font-size:12px;color:var(--muted)">${r.dur}</span>
     <span style="font-size:12px;color:var(--muted)">${r.cost}</span>
-  </div>`).join("");}
+  </div>`).join("");
+  refreshReviewPanel();
+}
+/* 复盘面板：从运行记录实时计算成功率/打回率/平均耗时/累计消耗 */
+function refreshReviewPanel(){
+  const total=Math.max(1,RUNS.length);
+  const ok=RUNS.filter(r=>r.st==="成功").length;
+  const rej=RUNS.filter(r=>r.st==="打回重做"||r.st==="待审片").length;
+  const mins=RUNS.map(r=>parseInt(String(r.dur||"0m").split("m")[0],10)||0);
+  const avg=mins.length?Math.round(mins.reduce((a,b)=>a+b,0)/mins.length):0;
+  const cost=RUNS.reduce((s,r)=>s+parseFloat(String(r.cost||"0").replace("¥","")||0),0);
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  set("rpOk",(ok/total*100).toFixed(0)+"%");
+  set("rpRej",(rej/total*100).toFixed(0)+"%");
+  set("rpDur",avg+"m");
+  set("rpCost","¥"+cost.toFixed(2));
+}
 function openRun(id){
   const r=RUNS.find(x=>x.id===id);
   document.getElementById("runDetail").style.display="block";
@@ -736,11 +797,27 @@ ${r.st==='打回重做'?'[14:23:10] ↩ 回到「AI 调色」重做\n':'[14:23:0
     <div style="margin-top:12px;font-size:12px;color:var(--muted)">节点级日志</div>
     <div class="log">${logs}</div>`;
 }
-function renderBrand(){document.getElementById("brandGrid").innerHTML=BRANDS.map(b=>`
+function renderBrand(){document.getElementById("brandGrid").innerHTML=BRANDS.map((b,i)=>`
   <div class="brand-card"><h4>${b.nm}</h4>
     <div class="swatch-row">${b.color.map(c=>`<div class="swatch" style="background:${c}"></div>`).join("")}</div>
     <div class="kv">字体：${b.font}<br>Logo：${b.logo}<br>禁用：${b.ban}<br>已应用于：${b.used}</div>
+    <button class="btn sm ghost edit-only" style="margin-top:10px" onclick="applyBrand(${i})">应用到 AI 调色节点</button>
   </div>`).join("");}
+/* 品牌 → 当前工作流「AI 调色/调性」节点联动 */
+function applyBrand(i){
+  const b=BRANDS[i];
+  if(!currentWF){alert("请先在「生产线」页生成工作流，再应用品牌");return;}
+  let hit=0;
+  currentWF.nodes.forEach(n=>{
+    if(/调色|调性|风格/i.test((n.title||"")+(n.skill||""))){n.brand=b.nm;hit++;}
+  });
+  currentWF.lineName=(currentWF.lineName||"生产线")+"（品牌："+b.nm+"）";
+  TEMPLATES[currentWF.lineName]=JSON.parse(JSON.stringify(currentWF));
+  currentTplName=currentWF.lineName;
+  renderWorkflow(currentTplName);
+  alert(hit?("品牌「"+b.nm+"」已应用到 "+hit+" 个调色节点：色板 "+b.color.join(" / ")+" ✓ 点节点可查看引用")
+       :"当前工作流没有「AI 调色」类节点；品牌已记录到生产线名称，生成调色节点后即生效");
+}
 function renderChannels(){document.getElementById("channelList").innerHTML=CHANNELS.map((c,i)=>`
   <div class="channel"><div class="dotc">${c.ic}</div>
     <div class="ci"><div class="cn">${c.n}</div><div class="cs ${c.on?'connected':''}">${c.s}</div></div>
@@ -793,8 +870,9 @@ function selectNode(id){
   document.getElementById("node-"+id).classList.add("node-selected");
   const n=currentNodes.find(x=>x.id===id);
   const so=SKILLS.find(s=>s.name===n.skill)||{in:"—",out:"—",desc:n.desc};
+  const brandLine=n.brand?`<div class="skill" style="color:var(--coral)">🎨 引用品牌：${n.brand}</div>`:"";
   document.getElementById("prop").innerHTML=`
-    <h3>${n.title}</h3><div class="skill">${n.type} · 调用 Skill：${n.skill}</div>
+    <h3>${n.title}</h3><div class="skill">${n.type} · 调用 Skill：${n.skill}</div>${brandLine}
     <label>节点名称</label><input value="${n.title}">
     <label>使用 Skill</label><select>${SKILLS.map(s=>`<option ${s.name===n.skill?"selected":""}>${s.name}</option>`).join("")}</select>
     <label>参数配置（演示）</label><input value="${n.desc}">
@@ -903,11 +981,12 @@ document.getElementById("exportBtn").onclick=()=>{
   else alert("当前生产线无发布节点，或尚未授权渠道。可在「账户与集成」中连接渠道。");
 };
 document.getElementById("saveTplBtn").onclick=()=>{
-  const raw=document.getElementById("prompt").value.trim();
-  const name=(raw.length>10?raw.slice(0,10)+"…":raw)||"我的生产线";
-  TPLS.unshift({nm:name+"（我的模板）",desc:"由自然语言生成并保存的自定义生产线，可继续编辑复用。",tg:["我的","自定义"],key:currentTplName});
+  if(!currentWF){alert("请先生成工作流，再存为模板");return;}
+  const nm=currentWF.lineName||"我的生产线";
+  TEMPLATES[nm]=JSON.parse(JSON.stringify(currentWF)); // 保存真实画布数据（含 reworkLoop/品牌）
+  if(!TPLS.some(t=>t.key===nm)) TPLS.unshift({nm:nm,desc:"由自然语言生成并保存的自定义生产线，含运行 / 审片 / 品牌配置，可一键复用。",tg:["我的","自定义"],key:nm});
   renderTpl();
-  alert("已存为模板："+name+"（我的模板），可在「模板中心」复用 ✓");
+  alert("已存为模板：「"+nm+"」✓ 可在「模板中心」一键复用（含完整画布与配置）");
 };
 document.getElementById("mediaFilters").querySelectorAll(".fchip").forEach(f=>f.onclick=()=>{
   document.querySelectorAll("#mediaFilters .fchip").forEach(x=>x.classList.remove("active"));
@@ -961,6 +1040,19 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
       if(g)setTimeout(()=>g.classList.remove("node-exec"),700);
       return false;
     }
+    // 图像节点：真实调用 AI 图像生成（场景生成 / AI 调色 / 智能抠图）
+    if(isImgNode(n)){
+      await sleep(400);
+      ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
+      setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
+      const matHint=selectedAssets.length?("，输入素材："+selectedAssets.join("、")):"";
+      const imgUrl=await fetchRealImage((wf.lineName||"")+"，"+(n.title||"")+"，"+(n.desc||"")+matHint);
+      if(imgUrl){ctx.imgUrl=imgUrl;ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → AI 出图完成");}
+      else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
+      if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+      ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
+      continue;
+    }
     await sleep(650);
     ctx.logs.push("["+nowStr()+"] "+n.title+" → OK");
     if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
@@ -972,12 +1064,23 @@ function pushReviewTask(wf,condNode,ctx){
   runState.seq++;
   const reqs=["背景色调偏暖，人物更突出","主视觉文案需换一版，颜色太刺眼","亮度再提一档，构图微调","左侧留白多些，标题更醒目","成片风格偏冷，改为暖色调"];
   const grads=["linear-gradient(135deg,#ffecd2,#fcb69f)","linear-gradient(135deg,#a1c4fd,#c2e9fb)","linear-gradient(135deg,#fbc2eb,#a6c1ee)","linear-gradient(135deg,#d4fc79,#96e6a1)","linear-gradient(135deg,#84fab0,#8fd3f4)"];
-  const item={id:"rv"+runState.seq,t:(wf.lineName||"生产线")+" · 自动生成成片",s:"待审核",c:grads[Math.floor(Math.random()*grads.length)],req:reqs[Math.floor(Math.random()*reqs.length)],from:"run",rounds:ctx.rounds||1,backTo:findBackTo(wf,condNode.id)};
+  const item={id:"rv"+runState.seq,t:(wf.lineName||"生产线")+" · 自动生成成片",s:"待审核",c:grads[Math.floor(Math.random()*grads.length)],req:reqs[Math.floor(Math.random()*reqs.length)],from:"run",rounds:ctx.rounds||1,backTo:findBackTo(wf,condNode.id),imgUrl:ctx.imgUrl||null};
   REVIEW.unshift(item);
   if(!ctx.reviews)ctx.reviews=[];
   ctx.reviews.push(item.id);
   return item.id;
 }
+/* 真实 AI 图像生成：fetch 云函数 mode:"image"，30s 超时，失败返回 null */
+async function fetchRealImage(prompt){
+  try{
+    const ctrl=new AbortController(),tm=setTimeout(()=>ctrl.abort(),30000);
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"image",prompt}),signal:ctrl.signal});
+    clearTimeout(tm);
+    const d=await res.json();
+    return (d&&d.ok&&d.url)?d.url:null;
+  }catch(e){return null;}
+}
+function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
 async function startRun(){
   if(!currentWF){alert("请先在「生产线」页生成工作流，再点运行");return;}
   if(runState.running){alert("已有流程在运行或等待审片，请先处理");return;}
@@ -1019,6 +1122,7 @@ function finishRun(wf,ctx){
   runState.running=false;
   stopRunUI();
   const logs=ctx.logs||[];
+  if(selectedAssets.length)logs.push("["+nowStr()+"] 📦 本次运行使用素材："+selectedAssets.join("、"));
   const pubNodes=wf.nodes.filter(n=>/发布|推送|分发/i.test((n.title||"")+(n.skill||"")));
   if(pubNodes.length){
     const chs=CHANNELS.filter(c=>c.on).map(c=>c.n);
@@ -1026,7 +1130,7 @@ function finishRun(wf,ctx){
   }
   const revCount=ctx.reviews?ctx.reviews.length:0;
   logs.push("["+nowStr()+"] ✔ 运行结束"+(revCount?("（"+revCount+" 次审片 · "):"（")+"消耗 ¥"+ctx.cost.toFixed(2)+"）");
-  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:100,s:"已交付",st:"p-teal"});
+  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:100,s:"已交付",st:"p-teal",imgUrl:ctx.imgUrl||null});
   runState.seq++;
   const durMin=1+Math.floor(Math.random()*4),durSec=Math.floor(Math.random()*60);
   RUNS.unshift({id:"RUN-"+Math.floor(2042+Math.random()*800),nm:wf.lineName,st:"成功",cls:"p-teal",time:nowStr().slice(0,16),dur:durMin+"m"+String(durSec).padStart(2,"0")+"s",cost:"¥"+ctx.cost.toFixed(2),nodes:wf.nodes.length,logs});
