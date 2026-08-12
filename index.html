@@ -1168,8 +1168,17 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
       ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
       setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
       const imgPrompt=buildImagePrompt(n,wf,order,i,ctx.feedback);
-      const imgUrl=await fetchRealImage(imgPrompt, selectedAssetUrls.filter(Boolean));
-      if(imgUrl){ctx.imgUrl=imgUrl;ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → AI 出图完成");}
+      const imgResp=await fetchRealImage(imgPrompt, selectedAssetUrls.filter(Boolean));
+      const imgUrl=imgResp&&imgResp.url?imgResp.url:null;
+      if(imgUrl){
+        ctx.imgUrl=imgUrl;
+        let tag="AI 出图";
+        if(imgResp.source==="wanx_ref")tag="🖼️ 万相参考图（认到素材）";
+        else if(imgResp.source==="cogview_fallback")tag="⚠️ 万相失败·回退CogView("+(imgResp.note||"未知")+")";
+        else if(imgResp.source==="cogview_ok")tag="⚠️ 纯文生图（未使用素材/未走万相）";
+        else if(imgResp.source==="image_fallback")tag="⚠️ 图像服务失败("+(imgResp.note||"")+")";
+        ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);
+      }
       else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
       if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
       ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
@@ -1201,8 +1210,8 @@ async function fetchRealImage(prompt,images){
     const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:ctrl.signal});
     clearTimeout(tm);
     const d=await res.json();
-    return (d&&d.ok&&d.url)?d.url:null;
-  }catch(e){return null;}
+    return d||{}; // 含 ok/url/source/note，便于前端显示出图来源与失败原因
+  }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
 }
 function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
 /* 为图像生成节点构造高质量 prompt：
