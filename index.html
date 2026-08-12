@@ -1127,54 +1127,78 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
     const g=document.getElementById("node-"+n.id);
     if(g){g.classList.remove("node-exec","node-rework");g.classList.add("node-exec");g.scrollIntoView({block:"center",behavior:"smooth"});}
     if(n.type==="判断"){
-      ctx.logs.push("["+nowStr()+"] ⚖️ "+n.title+" → 进入审片台，等待人工审核");
-      const reviewId=pushReviewTask(wf,n,ctx);
+      // 自动合规预检（真实 API 入口；轻量规则版，配置 ALIYUN_AK 后可升级阿里云内容安全）
+      let autoCheck="";
+      try{
+        const mResp=await fetchModeration((wf.lineName||"")+" "+(n.title||""));
+        if(mResp&&mResp.ok){autoCheck=mResp.pass?"自动合规预检：通过":"自动合规预检：发现风险 "+((mResp.reasons||[]).join("/")||"内容");}
+        else if(mResp){autoCheck="自动合规预检："+(mResp.note||"暂不可用");}
+      }catch(_){autoCheck="自动合规预检：暂不可用";}
+      ctx.logs.push("["+nowStr()+"] ⚖️ "+n.title+" → 进入审片台，等待人工审核"+(autoCheck?("（"+autoCheck+"）"):""));
+      const reviewId=pushReviewTask(wf,n,ctx,autoCheck);
       ctx.reviewId=reviewId;ctx.idx=i;
       runState.pending=ctx;
       setRunStatus("⏳ 等待审片 · 请到「审片台」处理","warn");
       if(g)setTimeout(()=>g.classList.remove("node-exec"),700);
       return false;
     }
-    // 图像节点：真实调用 AI 图像生成（场景生成 / AI 调色 / 智能抠图）
+    // 图像节点：真实调用 AI（场景生成 / AI 调色 / 智能抠图）
     if(isImgNode(n)){
       await sleep(400);
-      ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
-      setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
-      const imgPrompt=buildImagePrompt(n,wf,order,i,ctx.feedback);
-      const imgResp=await fetchRealImage(imgPrompt, selectedAssetUrls.filter(Boolean));
-      const imgUrl=imgResp&&imgResp.url?imgResp.url:null;
-      if(imgUrl){
-        ctx.imgUrl=imgUrl;
-        let tag="AI 出图";
-        if(imgResp.source==="wanx_ref")tag="🖼️ 万相参考图（认到素材）";
-        else if(imgResp.source==="cogview_fallback")tag="⚠️ 万相失败·回退CogView("+(imgResp.note||"未知")+")";
-        else if(imgResp.source==="cogview_ok")tag="⚠️ 纯文生图（未使用素材/未走万相）";
-        else if(imgResp.source==="image_fallback")tag="⚠️ 图像服务失败("+(imgResp.note||"")+")";
-        ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);
+      const role=(n.skill||n.title||"").trim();
+      if(/智能抠图|抠图/i.test(role)){
+        // 真实智能抠图：去背景（mode:"matting"，复用万相 foreground_extraction）
+        ctx.logs.push("["+nowStr()+"] ✂️ "+n.title+" → 调用 AI 智能抠图（去背景）…");
+        setRunStatus("✂️ "+n.title+" · 真实抠图中…","busy");
+        const mResp=await fetchMatting(selectedAssetUrls.filter(Boolean));
+        const mUrl=mResp&&mResp.url?mResp.url:null;
+        if(mUrl){ctx.imgUrl=mUrl;let tag=mResp.source==="wanx_matting"?"🖼️ 智能抠图（去背景·真）":"⚠️ 抠图失败·回退("+(mResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
+        else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 抠图暂不可用，已用占位图");}
+      }else{
+        ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
+        setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
+        const imgPrompt=buildImagePrompt(n,wf,order,i,ctx.feedback);
+        const imgResp=await fetchRealImage(imgPrompt, selectedAssetUrls.filter(Boolean));
+        const imgUrl=imgResp&&imgResp.url?imgResp.url:null;
+        if(imgUrl){
+          ctx.imgUrl=imgUrl;
+          let tag="AI 出图";
+          if(imgResp.source==="wanx_ref")tag="🖼️ 万相参考图（认到素材）";
+          else if(imgResp.source==="cogview_fallback")tag="⚠️ 万相失败·回退CogView("+(imgResp.note||"未知")+")";
+          else if(imgResp.source==="cogview_ok")tag="⚠️ 纯文生图（未使用素材/未走万相）";
+          else if(imgResp.source==="image_fallback")tag="⚠️ 图像服务失败("+(imgResp.note||"")+")";
+          ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);
+        }
+        else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
       }
-      else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
       if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
       ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
       continue;
     }
     await sleep(650);
-    ctx.logs.push("["+nowStr()+"] "+n.title+" → OK");
-    if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+    const role2=(n.skill||n.title||"").trim();
+    if(/视频粗剪|配乐|字幕|生成预览相册|相册/i.test(role2)){
+      ctx.logs.push("["+nowStr()+"] ⚠️ "+n.title+" → 规划中（模拟，一期未接真实引擎）");
+      if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+    }else{
+      ctx.logs.push("["+nowStr()+"] "+n.title+" → OK");
+      if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+    }
     ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
   }
   return true;
 }
-function pushReviewTask(wf,condNode,ctx){
+function pushReviewTask(wf,condNode,ctx,autoCheck){
   runState.seq++;
   const reqs=["背景色调偏暖，人物更突出","主视觉文案需换一版，颜色太刺眼","亮度再提一档，构图微调","左侧留白多些，标题更醒目","成片风格偏冷，改为暖色调"];
   const grads=["linear-gradient(135deg,#ffecd2,#fcb69f)","linear-gradient(135deg,#a1c4fd,#c2e9fb)","linear-gradient(135deg,#fbc2eb,#a6c1ee)","linear-gradient(135deg,#d4fc79,#96e6a1)","linear-gradient(135deg,#84fab0,#8fd3f4)"];
-  const item={id:"rv"+runState.seq,t:(wf.lineName||"生产线")+" · 自动生成成片",s:"待审核",c:grads[Math.floor(Math.random()*grads.length)],req:reqs[Math.floor(Math.random()*reqs.length)],from:"run",rounds:ctx.rounds||1,backTo:findBackTo(wf,condNode.id),imgUrl:ctx.imgUrl||null};
+  const item={id:"rv"+runState.seq,t:(wf.lineName||"生产线")+" · 自动生成成片",s:"待审核",c:grads[Math.floor(Math.random()*grads.length)],req:reqs[Math.floor(Math.random()*reqs.length)],from:"run",rounds:ctx.rounds||1,backTo:findBackTo(wf,condNode.id),imgUrl:ctx.imgUrl||null,autoCheck:autoCheck||""};
   REVIEW.unshift(item);
   if(!ctx.reviews)ctx.reviews=[];
   ctx.reviews.push(item.id);
   return item.id;
 }
-/* 真实 AI 图像生成：fetch 云函数 mode:"image"，30s 超时，失败返回 null */
+/* 真实 AI 图像生成：fetch 云函数 mode:"image"，60s 超时，失败返回 null */
 async function fetchRealImage(prompt,images){
   try{
     const ctrl=new AbortController(),tm=setTimeout(()=>ctrl.abort(),60000);
@@ -1184,6 +1208,26 @@ async function fetchRealImage(prompt,images){
     clearTimeout(tm);
     const d=await res.json();
     return d||{}; // 含 ok/url/source/note，便于前端显示出图来源与失败原因
+  }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
+}
+/* 真实 AI 智能抠图：fetch 云函数 mode:"matting"，去背景，复用万相 foreground_extraction */
+async function fetchMatting(images){
+  try{
+    const ctrl=new AbortController(),tm=setTimeout(()=>ctrl.abort(),60000);
+    const body={mode:"matting"};
+    if(Array.isArray(images)&&images.length)body.images=images.filter(Boolean);
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:ctrl.signal});
+    clearTimeout(tm);
+    const d=await res.json();
+    return d||{};
+  }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
+}
+/* 真实合规审核预检：fetch 云函数 mode:"moderation" */
+async function fetchModeration(text){
+  try{
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"moderation",prompt:text})});
+    const d=await res.json();
+    return d||{};
   }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
 }
 function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
