@@ -73,6 +73,13 @@
   .node-rect{cursor:pointer}
   .node-rect:hover rect{stroke-width:2}
   .node-selected rect{stroke:var(--primary);stroke-width:2.5}
+  .node-exec rect{stroke:var(--primary);stroke-width:2.5;filter:drop-shadow(0 0 5px rgba(47,111,237,.55))}
+  .node-done rect{stroke:var(--teal);stroke-width:2}
+  .node-done text{opacity:.75}
+  .node-rework rect{stroke:var(--coral);stroke-width:2.5;filter:drop-shadow(0 0 5px rgba(194,65,12,.5))}
+  .run-status{font-size:12px;color:var(--teal);font-weight:600;margin-left:4px}
+  .run-status.busy{color:var(--primary)}
+  .run-status.warn{color:var(--amber)}
   .prop{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
   .prop h3{font-size:14px;margin-bottom:4px}
   .prop .skill{font-size:12px;color:var(--teal);margin-bottom:12px}
@@ -299,8 +306,11 @@
           <div id="wfMount" style="display:none">
             <div class="toolbar">
               <button class="btn ghost edit-only" id="backBtn">← 返回修改</button>
-              <button class="btn edit-only" id="exportBtn">导出 / 发布</button>
+              <button class="btn edit-only" id="runBtn" style="background:var(--teal)">▶ 运行</button>
+              <button class="btn ghost edit-only" id="stopBtn" style="display:none">⏹ 停止</button>
+              <button class="btn edit-only" id="exportBtn">发布</button>
               <button class="btn ghost edit-only" id="saveTplBtn">存为模板</button>
+              <span id="runStatus" class="run-status" style="margin-left:auto"></span>
             </div>
             <div class="wf-wrap">
               <div class="canvas" id="canvas"></div>
@@ -591,7 +601,7 @@ let TPLS = [
   {nm:"活动跟拍即时出片",desc:"现场粗修→即时生成图文纪要→推送参会者。发布会/会议场景。",tg:["活动","即时"],key:"商品图生产线"}
 ];
 
-const DELIV = [
+let DELIV = [
   {c:"抖音旗舰店 · 夏季上新",t:"商品图",p:100,s:"已交付",st:"p-teal"},
   {c:"连锁餐饮 B · 探店九宫格",t:"美食探店",p:100,s:"已交付",st:"p-teal"},
   {c:"客户 A · 婚纱套系",t:"写真交付",p:60,s:"待客户审片",st:"p-amber"},
@@ -599,13 +609,16 @@ const DELIV = [
   {c:"营销活动 · 广告物料",t:"物料批产",p:45,s:"已打回重做",st:"p-coral"}
 ];
 
-const REVIEW = [
-  {id:"r1",t:"客户 A · 婚纱套系",s:"待客户审片",c:"linear-gradient(135deg,#ffecd2,#fcb69f)",req:"背景色调偏暖，人物更突出"},
-  {id:"r2",t:"营销活动 · 广告物料",s:"已打回重做",c:"linear-gradient(135deg,#fbc2eb,#a6c1ee)",req:"主视觉文案需换 A 版，红色太刺眼"},
-  {id:"r3",t:"品牌 C · 民宿空间图",s:"待客户审片",c:"linear-gradient(135deg,#a1c4fd,#c2e9fb)",req:"客厅图亮度再提一档"}
+/* ============ 闭环运行时状态（动态，来自真实运行） ============ */
+let currentWF=null;        // 当前画布工作流 {nodes,edges,reworkLoop,lineName}
+let runState={running:false,seq:0,pending:null}; // pending={order,idx,wf,reviewId,backTo}
+let REVIEW = [
+  {id:"r1",t:"客户 A · 婚纱套系",s:"待客户审片",c:"linear-gradient(135deg,#ffecd2,#fcb69f)",req:"背景色调偏暖，人物更突出",from:"seed",rounds:1,backTo:"c"},
+  {id:"r2",t:"营销活动 · 广告物料",s:"已打回重做",c:"linear-gradient(135deg,#fbc2eb,#a6c1ee)",req:"主视觉文案需换 A 版，红色太刺眼",from:"seed",rounds:2,backTo:"c"},
+  {id:"r3",t:"品牌 C · 民宿空间图",s:"待客户审片",c:"linear-gradient(135deg,#a1c4fd,#c2e9fb)",req:"客厅图亮度再提一档",from:"seed",rounds:1,backTo:"c"}
 ];
 
-const RUNS = [
+let RUNS = [
   {id:"RUN-2041",nm:"商品图生产线 · 抖音旗舰店",st:"成功",cls:"p-teal",time:"2026-08-11 14:22",dur:"2m13s",cost:"¥0.42",nodes:6},
   {id:"RUN-2040",nm:"广告物料批产 · 营销活动",st:"打回重做",cls:"p-coral",time:"2026-08-11 13:50",dur:"1m48s",cost:"¥0.31",nodes:6},
   {id:"RUN-2039",nm:"美食探店图 · 连锁餐饮 B",st:"成功",cls:"p-teal",time:"2026-08-11 11:05",dur:"3m02s",cost:"¥0.55",nodes:6},
@@ -673,24 +686,28 @@ function useTpl(key){goLines(); const t=document.getElementById("prompt"); t.val
 
 /* ============ 审片台 ============ */
 function renderReview(){document.getElementById("revList").innerHTML=REVIEW.map(r=>{
-  const cls=r.s==="已打回重做"?"p-coral":"p-amber";
+  const cls=r.s==="已通过"?"p-teal":r.s==="已打回重做"?"p-coral":"p-amber";
+  const roundsInfo=(r.rounds&&r.rounds>1)?` · 第${r.rounds}轮`:"";
+  const act=r.s==="已通过"?"已处理":(r.s==="已打回重做"?"查看原因":"点击审片");
   return `<div class="rev-item" onclick="openReview('${r.id}',this)">
     <div class="rev-thumb" style="background:${r.c}"></div>
-    <div class="rev-meta"><div class="t">${r.t}</div><div class="s">${r.s} · 点击审片</div></div>
+    <div class="rev-meta"><div class="t">${r.t}${roundsInfo}</div><div class="s">${r.s} · ${act}</div></div>
     <span class="pill ${cls}">${r.s}</span>
   </div>`;}).join("");}
 function openReview(id,el){
   const r=REVIEW.find(x=>x.id===id);
   document.querySelectorAll(".rev-item").forEach(e=>e.classList.remove("active"));
   if(el) el.classList.add("active");
+  const roundsInfo=(r.rounds&&r.rounds>1)?` · <span style="color:var(--coral)">第 ${r.rounds} 轮</span>`:"";
+  const statusPill=r.s==="已通过"?'<span class="pill p-teal">已通过</span>':r.s==="已打回重做"?'<span class="pill p-coral">已打回重做</span>':'<span class="pill p-amber">待审核</span>';
   document.getElementById("revDetail").innerHTML=`
-    <div class="hint">${r.t}</div>
+    <div class="hint">${r.t}${roundsInfo} ${statusPill}</div>
     <div class="rev-img" style="background:${r.c}"></div>
-    <div style="font-size:12px;color:var(--muted)">客户要求：${r.req}</div>
+    <div style="font-size:12px;color:var(--muted)">需求 / 反馈：${r.req}</div>
     <textarea class="annot" placeholder="填写批注（如：第二张背景再虚化一点）"></textarea>
     <div class="rev-actions">
-      <button class="btn edit-only" onclick="alert('已通过，成片推送至客户 / 发布渠道 ✓')">✓ 通过</button>
-      <button class="btn danger edit-only" onclick="alert('已打回：生产线自动回到上游节点重做')">↩ 打回重做</button>
+      <button class="btn edit-only" onclick="reviewPass('${r.id}')">✓ 通过</button>
+      <button class="btn danger edit-only" onclick="reviewReject('${r.id}')">↩ 打回重做</button>
     </div>`;
 }
 function renderRuns(){document.getElementById("runsList").innerHTML=RUNS.map(r=>`
@@ -704,19 +721,20 @@ function renderRuns(){document.getElementById("runsList").innerHTML=RUNS.map(r=>
 function openRun(id){
   const r=RUNS.find(x=>x.id===id);
   document.getElementById("runDetail").style.display="block";
+  const logs=r.logs?r.logs.map(l=>l.replace(/</g,"&lt;")).join("\n"):`[14:22:01] 触发器「上传原图」OK
+[14:22:03] 图片分类 → 商品 (置信度 0.97)
+[14:22:09] 智能抠图 OK (透明底图 1024×1024)
+[14:22:18] AI 调色 → 抖音规格 OK
+[14:22:40] 场景生成 OK
+[14:22:55] 合规审核 → ${r.st==='打回重做'?'不通过，打回调色':'通过'}
+${r.st==='打回重做'?'[14:23:10] ↩ 回到「AI 调色」重做\n':'[14:23:02] 多平台发布 → 抖音+淘宝 OK\n'}[14:23:30] 运行结束`;
   document.getElementById("runDetail").innerHTML=`
     <h3>${r.nm} · ${r.id}</h3>
     <div class="row"><span>状态</span><span class="pill ${r.cls}">${r.st}</span></div>
     <div class="row"><span>耗时 / 消耗</span><span>${r.dur} · ${r.cost}</span></div>
     <div class="row"><span>节点数</span><span>${r.nodes}</span></div>
     <div style="margin-top:12px;font-size:12px;color:var(--muted)">节点级日志</div>
-    <div class="log">[14:22:01] 触发器「上传原图」OK
-[14:22:03] 图片分类 → 商品 (置信度 0.97)
-[14:22:09] 智能抠图 OK (透明底图 1024×1024)
-[14:22:18] AI 调色 → 抖音规格 OK
-[14:22:40] 场景生成 OK
-[14:22:55] 合规审核 → ${r.st==='打回重做'?'不通过，打回调色':'通过'}
-${r.st==='打回重做'?'[14:23:10] ↩ 回到「AI 调色」重做\n':'[14:23:02] 多平台发布 → 抖音+淘宝 OK\n'}[14:23:30] 运行结束</div>`;
+    <div class="log">${logs}</div>`;
 }
 function renderBrand(){document.getElementById("brandGrid").innerHTML=BRANDS.map(b=>`
   <div class="brand-card"><h4>${b.nm}</h4>
@@ -850,6 +868,7 @@ async function generate(){
     TEMPLATES[name]=lf;currentTplName=name;
     document.getElementById("wfMount").style.display="block";
     renderWorkflow(name);
+    registerWF(obj,lf,name);
     const tag=source==="coze"?(mockTag?"（示例数据）已通过 Coze 生成工作流：":"已通过 Coze 智能体实时生成工作流："):"（演示数据 · 线上未接入代理；部署 Cloudflare Worker 后此处即为真实 Coze 调用）已生成工作流：";
     document.getElementById("resultHint").textContent=tag+name;
     document.getElementById("resultHint").style.display="block";
@@ -861,6 +880,7 @@ async function generate(){
     TEMPLATES[name]=lf;currentTplName=name;
     document.getElementById("wfMount").style.display="block";
     renderWorkflow(name);
+    registerWF(FRONT_FALLBACK,lf,name);
     const errMsg=(err&&err.message)?err.message:"网络不可达";
     const diag="代理地址："+COZE_PROXY_URL+"\n错误："+errMsg+"\n\n排查建议：\n1. 若开启了梯子/Clash/VPN，请关闭或把 *.tencentscf.com 加入直连；\n2. 不要直接双击 index.html，请用 start-local.bat 启动 localhost:8080；\n3. 也可直接到扣子体验真实智能体。";
     document.getElementById("resultHint").innerHTML="（演示数据 · "+errMsg+"，已降级）已生成工作流："+name+" <a href='#' onclick='alert(`"+diag+"`);return false;' style='color:#ff6b6b;text-decoration:underline'>查看诊断</a>";
@@ -873,7 +893,15 @@ const samples=["帮我搭一条商品图生产线：原图进来先分类，再�
 document.getElementById("chips").innerHTML=samples.map(s=>`<span class="chip" onclick="document.getElementById('prompt').value=this.textContent">${s}</span>`).join("");
 document.getElementById("genBtn").onclick=generate;
 document.getElementById("backBtn").onclick=()=>{document.getElementById("wfMount").style.display="none";document.getElementById("resultHint").style.display="block";};
-document.getElementById("exportBtn").onclick=()=>alert("演示：导出 / 发布需后端工作流引擎支持。当前为前端原型。");
+document.getElementById("runBtn").onclick=startRun;
+document.getElementById("stopBtn").onclick=stopRun;
+document.getElementById("exportBtn").onclick=()=>{
+  if(!currentWF){alert("请先「生成工作流」");return;}
+  const pubNodes=currentWF.nodes.filter(n=>/发布|推送|分发/i.test(n.title+n.skill||""));
+  const chs=CHANNELS.filter(c=>c.on).map(c=>c.n);
+  if(pubNodes.length&&chs.length) alert("已发布到："+chs.join(" + ")+" ✓\n（审核通过的成片已进入发布节点，可在「交付管理/运行记录」查看）");
+  else alert("当前生产线无发布节点，或尚未授权渠道。可在「账户与集成」中连接渠道。");
+};
 document.getElementById("saveTplBtn").onclick=()=>{
   const raw=document.getElementById("prompt").value.trim();
   const name=(raw.length>10?raw.slice(0,10)+"…":raw)||"我的生产线";
@@ -884,6 +912,161 @@ document.getElementById("saveTplBtn").onclick=()=>{
 document.getElementById("mediaFilters").querySelectorAll(".fchip").forEach(f=>f.onclick=()=>{
   document.querySelectorAll("#mediaFilters .fchip").forEach(x=>x.classList.remove("active"));
   f.classList.add("active");renderMedia(f.dataset.f);});
+
+/* ============ 闭环引擎：运行 → 审片 → 打回 → 发布 → 复盘 ============ */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function nowStr(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;}
+function setRunStatus(msg,cls){const el=document.getElementById("runStatus");if(el){el.textContent=msg;el.className="run-status "+(cls||"");}}
+
+function registerWF(obj,lf,name){
+  currentWF={nodes:lf.nodes,edges:lf.edges,reworkLoop:obj.reworkLoop||{},lineName:name};
+  setRunStatus("已生成 · 点「▶ 运行」执行流水线","");
+}
+/* 拓扑排序（仅跳过打回/重做回退边，通过边保留） */
+function topoOrder(wf){
+  const back=new Set();
+  wf.edges.forEach(e=>{if(/打回|重做|退回|rework/i.test(e.label||""))back.add(e.from+"->"+e.to);});
+  const indeg={},adj={};
+  wf.nodes.forEach(n=>{indeg[n.id]=0;adj[n.id]=[];});
+  wf.edges.forEach(e=>{if(back.has(e.from+"->"+e.to))return;adj[e.from].push(e.to);indeg[e.to]++;});
+  const q=wf.nodes.filter(n=>!indeg[n.id]).map(n=>n.id),res=[];
+  while(q.length){
+    const id=q.shift();res.push(id);
+    (adj[id]||[]).forEach(t=>{if(--indeg[t]===0)q.push(t);});
+  }
+  wf.nodes.forEach(n=>{if(res.indexOf(n.id)<0)res.push(n.id);});
+  return res;
+}
+function findBackTo(wf,condId){
+  const rl=wf.reworkLoop;
+  if(rl&&rl.backTo)return rl.backTo;
+  const re=wf.edges.find(e=>e.from===condId&&/打回|重做|退回|rework/i.test(e.label||""));
+  if(re)return re.to;
+  const idx=wf.nodes.findIndex(n=>n.id===condId);
+  return wf.nodes[Math.max(0,idx-1)].id;
+}
+/* 执行一段节点（fromIdx..toIdx）；遇「判断」节点暂停进审片台；日志累计到 ctx.logs */
+async function runSegment(order,fromIdx,toIdx,wf,ctx){
+  for(let i=fromIdx;i<=toIdx;i++){
+    if(!runState.running){ctx.logs.push("["+nowStr()+"] ⏹ 运行已停止");return false;}
+    const n=wf.nodes.find(x=>x.id===order[i]);
+    const g=document.getElementById("node-"+n.id);
+    if(g){g.classList.remove("node-exec","node-rework");g.classList.add("node-exec");g.scrollIntoView({block:"center",behavior:"smooth"});}
+    if(n.type==="判断"){
+      ctx.logs.push("["+nowStr()+"] ⚖️ "+n.title+" → 进入审片台，等待人工审核");
+      const reviewId=pushReviewTask(wf,n,ctx);
+      ctx.reviewId=reviewId;ctx.idx=i;
+      runState.pending=ctx;
+      setRunStatus("⏳ 等待审片 · 请到「审片台」处理","warn");
+      if(g)setTimeout(()=>g.classList.remove("node-exec"),700);
+      return false;
+    }
+    await sleep(650);
+    ctx.logs.push("["+nowStr()+"] "+n.title+" → OK");
+    if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+    ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
+  }
+  return true;
+}
+function pushReviewTask(wf,condNode,ctx){
+  runState.seq++;
+  const reqs=["背景色调偏暖，人物更突出","主视觉文案需换一版，颜色太刺眼","亮度再提一档，构图微调","左侧留白多些，标题更醒目","成片风格偏冷，改为暖色调"];
+  const grads=["linear-gradient(135deg,#ffecd2,#fcb69f)","linear-gradient(135deg,#a1c4fd,#c2e9fb)","linear-gradient(135deg,#fbc2eb,#a6c1ee)","linear-gradient(135deg,#d4fc79,#96e6a1)","linear-gradient(135deg,#84fab0,#8fd3f4)"];
+  const item={id:"rv"+runState.seq,t:(wf.lineName||"生产线")+" · 自动生成成片",s:"待审核",c:grads[Math.floor(Math.random()*grads.length)],req:reqs[Math.floor(Math.random()*reqs.length)],from:"run",rounds:ctx.rounds||1,backTo:findBackTo(wf,condNode.id)};
+  REVIEW.unshift(item);
+  if(!ctx.reviews)ctx.reviews=[];
+  ctx.reviews.push(item.id);
+  return item.id;
+}
+async function startRun(){
+  if(!currentWF){alert("请先在「生产线」页生成工作流，再点运行");return;}
+  if(runState.running){alert("已有流程在运行或等待审片，请先处理");return;}
+  runState.running=true;
+  document.getElementById("runBtn").style.display="none";
+  document.getElementById("stopBtn").style.display="";
+  document.querySelectorAll(".node-rect").forEach(x=>x.classList.remove("node-done","node-rework","node-exec"));
+  const wf=currentWF,order=topoOrder(wf);
+  const ctx={order,idx:-1,wf,reviews:[],cost:0,rounds:1,logs:["["+nowStr()+"] ▶ 开始运行："+wf.lineName]};
+  setRunStatus("⚙️ 运行中 · 按拓扑顺序执行节点…","busy");
+  const ok=await runSegment(order,0,order.length-1,wf,ctx);
+  if(ok)finishRun(wf,ctx);
+  else if(!runState.running){stopRunUI();}
+}
+function stopRun(){runState.running=false;stopRunUI();setRunStatus("⏹ 已停止","");}
+function stopRunUI(){document.getElementById("runBtn").style.display="";document.getElementById("stopBtn").style.display="none";}
+async function continueRun(){
+  const p=runState.pending;if(!p)return;
+  runState.running=true;
+  setRunStatus("✔ 审核通过 · 继续执行后续节点…","busy");
+  const ok=await runSegment(p.order,p.idx+1,p.order.length-1,p.wf,p);
+  if(ok)finishRun(p.wf,p);
+}
+async function rerunSegment(){
+  const p=runState.pending;if(!p)return;
+  runState.running=true;
+  const wf=p.wf,order=p.order;
+  const backIdx=order.indexOf(p.backTo);
+  const startIdx=backIdx>=0?backIdx:0;
+  const g=document.getElementById("node-"+p.backTo);
+  if(g){g.classList.add("node-rework");setTimeout(()=>g.classList.remove("node-rework"),2200);}
+  setRunStatus("↩ 已打回 · 从「"+(wf.nodes.find(n=>n.id===p.backTo)||{}).title+"」重做…","busy");
+  const ctx=Object.assign({},p,{rounds:(p.rounds||1)+1});
+  ctx.logs.push("["+nowStr()+"] ↩ 审片打回 → 回到节点「"+((wf.nodes.find(n=>n.id===p.backTo))||{}).title+"」重做");
+  const ok=await runSegment(order,startIdx,p.idx,wf,ctx);
+  if(ok)finishRun(wf,ctx);
+}
+function finishRun(wf,ctx){
+  runState.running=false;
+  stopRunUI();
+  const logs=ctx.logs||[];
+  const pubNodes=wf.nodes.filter(n=>/发布|推送|分发/i.test((n.title||"")+(n.skill||"")));
+  if(pubNodes.length){
+    const chs=CHANNELS.filter(c=>c.on).map(c=>c.n);
+    logs.push("["+nowStr()+"] 📮 "+pubNodes[0].title+" → "+(chs.length?chs.join(" + "):"（未连接渠道，已跳过）")+" OK");
+  }
+  const revCount=ctx.reviews?ctx.reviews.length:0;
+  logs.push("["+nowStr()+"] ✔ 运行结束"+(revCount?("（"+revCount+" 次审片 · "):"（")+"消耗 ¥"+ctx.cost.toFixed(2)+"）");
+  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:100,s:"已交付",st:"p-teal"});
+  runState.seq++;
+  const durMin=1+Math.floor(Math.random()*4),durSec=Math.floor(Math.random()*60);
+  RUNS.unshift({id:"RUN-"+Math.floor(2042+Math.random()*800),nm:wf.lineName,st:"成功",cls:"p-teal",time:nowStr().slice(0,16),dur:durMin+"m"+String(durSec).padStart(2,"0")+"s",cost:"¥"+ctx.cost.toFixed(2),nodes:wf.nodes.length,logs});
+  refreshStats();renderDeliv();renderRuns();
+  setRunStatus("✔ 运行成功 · 产出已交付（审片台 / 交付管理 / 运行记录可查）","");
+}
+function reviewPass(id){
+  const r=REVIEW.find(x=>x.id===id);
+  if(!r)return;
+  r.s="已通过";
+  const pend=runState.pending;
+  if(pend&&pend.reviewId===id){pend.reviewId=null;renderReview();setTimeout(continueRun,400);}
+  else{renderReview();renderDeliv();setRunStatus("✔ 已通过","");}
+}
+function reviewReject(id){
+  const r=REVIEW.find(x=>x.id===id);
+  if(!r)return;
+  r.s="已打回重做";
+  r.rounds=(r.rounds||1)+1;
+  const pend=runState.pending;
+  if(pend&&pend.reviewId===id){
+    pend.reviewId=null;pend.backTo=r.backTo;
+    renderReview();
+    setTimeout(rerunSegment,500);
+  }else{renderReview();setRunStatus("↩ 已打回重做","warn");}
+}
+function refreshStats(){
+  const qs=document.querySelectorAll("#view-home .stat .n");
+  if(qs.length!==4)return;
+  const active=RUNS.filter(r=>r.st==="运行中"||r.st==="待审片").length;
+  const total=Math.max(1,RUNS.length);
+  const ok=RUNS.filter(r=>r.st==="成功").length;
+  const cost=RUNS.reduce((s,r)=>s+parseFloat(String(r.cost||"0").replace("¥","")||0),0);
+  qs[0].textContent=active;
+  qs[1].textContent=(total*12).toLocaleString();
+  qs[2].textContent=(ok/total*100).toFixed(1)+"%";
+  qs[3].textContent=8;
+}
+/* init 后刷新统计 */
+setTimeout(refreshStats,200);
 
 /* ============ 自定义 Skill：调试 & 发布 ============ */
 function runDebug(){
