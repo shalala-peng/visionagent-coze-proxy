@@ -1082,7 +1082,7 @@ async function fetchRealImage(prompt){
   }catch(e){return null;}
 }
 function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
-/* 为图像生成节点构造高质量中文 prompt：融合用户原始需求、节点角色、参数、前置步骤 */
+/* 为图像生成节点构造高质量 prompt：英文视觉指令（CogView 训练数据以英文为主）+ 中文上下文 + 强制负面清单 */
 function buildImagePrompt(node,wf,order,idx){
   const userNeed=(window.lastUserPrompt||wf.lineName||"").trim();
   const role=(node.skill||node.title||"").trim();
@@ -1097,22 +1097,39 @@ function buildImagePrompt(node,wf,order,idx){
   if(prevSkills.has("智能抠图")||prevSkills.has("抠图"))upstream+="前置「智能抠图」已完成，商品主体已抠出，生成时请把商品主体自然融入场景，不要改变或遮挡主体。";
   if(prevSkills.has("AI调色"))upstream+="前置「AI调色」已完成，请保持当前整体色调风格。";
 
-  // 根据节点类型给出强化指令
-  let roleHint="";
-  if(/场景生成/i.test(role))roleHint="当前步骤是「场景生成」：请生成一张可作为电商产品背景/使用场景的图片，画面必须紧扣用户需求，不要出现与需求无关的复杂元素或工业场景。";
-  else if(/AI调色|调色/i.test(role))roleHint="当前步骤是「AI调色」：请对画面进行调色，生成一张整体色调符合参数要求的图片，保持主体内容与构图不变。";
-  else if(/抠图/i.test(role))roleHint="当前步骤是「智能抠图」：请生成一张展示商品主体被完整抠出、背景为透明或纯白的示意图。";
-  else roleHint="当前步骤是「"+role+"」：请生成一张严格符合用户需求的图片。";
+  // 核心英文视觉指令（CogView 对英文 prompt 语义最敏感）
+  let core="";
+  if(/场景生成/i.test(role)){
+    core=`Professional e-commerce product photography.
+Main subject: the final consumer product described by the user brief (e.g. a cup of coffee, a bottled drink, a packaged item) — NEVER raw materials, NEVER beans/leaves/grains, NEVER industrial scene.
+Setting: the product is placed on a warm-toned wooden table/desk, soft natural daylight from the side, shallow depth of field, clean simple background, cozy warm atmosphere.
+Composition: centered subject, slight 45-degree angle, product-focused shot, generous negative space.
+Quality: studio-grade, sharp focus on product, 1024x1024, photorealistic.`;
+  } else if(/AI调色|调色/i.test(role)){
+    core=`Apply AI color grading to the product scene.
+Keep the main subject and composition identical, only adjust color tone and mood to match: ${paramTxt||"warm, vibrant, commercial style"}.
+Same composition, only color grading changed. Photorealistic, 1024x1024.`;
+  } else if(/抠图/i.test(role)){
+    core=`Demonstrate subject cutout: the main product with pure white or transparent background, edges clean and crisp, no halo, product centered, sharp focus, 1024x1024.`;
+  } else {
+    core=`Generate a high-quality image that strictly matches the user brief: ${userNeed}. Photorealistic, 1024x1024.`;
+  }
 
-  const assetHint=selectedAssets.length?`输入/参考素材：${selectedAssets.join("、")}。`:"";
+  // 强制负面清单（防跑偏到咖啡豆工厂、流水线等）
+  const negative=`STRICTLY EXCLUDE: factories, production lines, machinery, industrial equipment, robots, raw materials (coffee beans, tea leaves, grains, powders, ingredients), workers, crowds, multiple unrelated people, on-screen text, watermarks, logos, blurry subjects, unrelated scenery, vehicles.`;
 
-  let prompt=`根据以下用户需求生成一张高清、无水印、适合电商/营销使用的图片。用户需求：${userNeed}。`;
-  prompt+=`当前生产步骤：${role}${paramTxt?"（参数："+paramTxt+"）":""}。`;
-  prompt+=roleHint;
-  prompt+=upstream;
-  prompt+=assetHint;
-  prompt+="要求：画面主体明确、风格一致、构图合理、光线自然、画质高清，不要出现与用户需求无关的元素。";
-  return prompt;
+  const assetHint=selectedAssets.length?`Input / reference materials: ${selectedAssets.join(", ")}.`:"";
+  const styleHint=paramTxt?`Style parameters: ${paramTxt}.`:"";
+
+  return `[English visual instruction - primary]
+${core}
+${negative}
+
+[Chinese context - reference]
+用户原始需求：${userNeed}
+当前生产步骤：${role}${paramTxt?"（参数："+paramTxt+"）":""}
+${upstream}${assetHint}${styleHint}
+要求：画面主体明确、风格一致、构图合理、画质高清。`;
 }
 async function startRun(){
   if(!currentWF){alert("请先在「生产线」页生成工作流，再点运行");return;}
