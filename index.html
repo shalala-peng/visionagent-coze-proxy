@@ -719,7 +719,7 @@ function toggleAsset(i){
   else{selectedAssets.push(m.nm);selectedAssetUrls.push(m.url||null);}
   const active=document.querySelector("#mediaFilters .fchip.active");
   renderMedia(active?active.dataset.f:"all");
-  renderPicker();
+  renderPicker();saveState();
 }
 /* 上传本地图片 → 压缩到 1024px 内 → 云函数存 COS → 拿公网 URL 加入素材库 */
 async function uploadAsset(input){
@@ -744,7 +744,7 @@ async function uploadAsset(input){
     selectedAssets.unshift(file.name);selectedAssetUrls.unshift(d.url);
     const active=document.querySelector("#mediaFilters .fchip.active");
     renderMedia(active?active.dataset.f:"all");
-    renderPicker();
+    renderPicker();saveState();
   }catch(err){
     alert("素材上传失败："+(err&&err.message?err.message:err)+"\n提示：请确认云函数已配置 COS_BUCKET / COS_SECRET_ID / COS_SECRET_KEY 并重新部署。");
   }finally{
@@ -787,7 +787,7 @@ function removeAsset(i){
   renderLinesAssetBar();
   const active=document.querySelector("#mediaFilters .fchip.active");
   if(active)renderMedia(active.dataset.f);
-  renderPicker();
+  renderPicker();saveState();
 }
 /* 生产线页内「从素材库选」弹窗 */
 function renderPicker(){
@@ -814,6 +814,7 @@ function pickerToggle(i){
   renderLinesAssetBar();
   const active=document.querySelector("#mediaFilters .fchip.active");
   if(active)renderMedia(active.dataset.f);
+  saveState();
 }
 function openAssetPicker(){const m=document.getElementById("assetPicker");if(m){m.style.display="flex";renderPicker();}}
 function closeAssetPicker(){const m=document.getElementById("assetPicker");if(m)m.style.display="none";}
@@ -932,7 +933,7 @@ function applyBrand(i){
   currentWF.lineName=(currentWF.lineName||"生产线")+"（品牌："+b.nm+"）";
   TEMPLATES[currentWF.lineName]=JSON.parse(JSON.stringify(currentWF));
   currentTplName=currentWF.lineName;
-  renderWorkflow(currentTplName);
+  renderWorkflow(currentTplName);saveState();
   alert(hit?("品牌「"+b.nm+"」已应用到 "+hit+" 个调色节点：色板 "+b.color.join(" / ")+" ✓ 点节点可查看引用")
        :"当前工作流没有「AI 调色」类节点；品牌已记录到生产线名称，生成调色节点后即生效");
 }
@@ -940,7 +941,7 @@ function renderChannels(){document.getElementById("channelList").innerHTML=CHANN
   <div class="channel"><div class="dotc">${c.ic}</div>
     <div class="ci"><div class="cn">${c.n}</div><div class="cs ${c.on?'connected':''}">${c.s}</div></div>
     <button class="btn sm ${c.on?'ghost':''}" onclick="toggleChannel(${i})">${c.on?'断开':'连接'}</button></div>`).join("");}
-function toggleChannel(i){CHANNELS[i].on=!CHANNELS[i].on;CHANNELS[i].s=CHANNELS[i].on?'已连接':'未连接';renderChannels();}
+function toggleChannel(i){CHANNELS[i].on=!CHANNELS[i].on;CHANNELS[i].s=CHANNELS[i].on?'已连接':'未连接';renderChannels();saveState();}
 function setRole(role){
   document.body.classList.remove("role-admin","role-member","role-viewer");
   document.body.classList.add("role-"+role);
@@ -1067,6 +1068,7 @@ async function generate(){
     document.getElementById("wfMount").style.display="block";
     renderWorkflow(name);
     registerWF(obj,lf,name);
+    saveState();
     const tag=source==="coze"?(mockTag?"（示例数据）已通过 Coze 生成工作流：":"已通过 Coze 智能体实时生成工作流："):"（演示数据 · 线上未接入代理；部署 Cloudflare Worker 后此处即为真实 Coze 调用）已生成工作流：";
     document.getElementById("resultHint").textContent=tag+name;
     document.getElementById("resultHint").style.display="block";
@@ -1105,7 +1107,7 @@ document.getElementById("saveTplBtn").onclick=()=>{
   const nm=currentWF.lineName||"我的生产线";
   TEMPLATES[nm]=JSON.parse(JSON.stringify(currentWF)); // 保存真实画布数据（含 reworkLoop/品牌）
   if(!TPLS.some(t=>t.key===nm)) TPLS.unshift({nm:nm,desc:"由自然语言生成并保存的自定义生产线，含运行 / 审片 / 品牌配置，可一键复用。",tg:["我的","自定义"],key:nm});
-  renderTpl();
+  renderTpl();saveState();
   alert("已存为模板：「"+nm+"」✓ 可在「模板中心」一键复用（含完整画布与配置）");
 };
 document.getElementById("mediaFilters").querySelectorAll(".fchip").forEach(f=>f.onclick=()=>{
@@ -1165,7 +1167,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
       await sleep(400);
       ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
       setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
-      const imgPrompt=buildImagePrompt(n,wf,order,i);
+      const imgPrompt=buildImagePrompt(n,wf,order,i,ctx.feedback);
       const imgUrl=await fetchRealImage(imgPrompt);
       if(imgUrl){ctx.imgUrl=imgUrl;ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → AI 出图完成");}
       else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
@@ -1204,7 +1206,7 @@ function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.
 /* 为图像生成节点构造高质量 prompt：
    - 通用结构：英文视觉指令 + 中文上下文 + 通用负面清单（对所有指令生效）
    - 动态行业词：按用户需求关键词自动追加对应负面词（食品/人像/空间类），互不干扰 */
-function buildImagePrompt(node,wf,order,idx){
+function buildImagePrompt(node,wf,order,idx,feedback){
   const userNeed=(window.lastUserPrompt||wf.lineName||"").trim();
   const role=(node.skill||node.title||"").trim();
   const params=node.params||{};
@@ -1236,6 +1238,17 @@ Same composition, only color grading changed. Photorealistic, 1024x1024.`;
     core=`Generate a high-quality image that strictly matches the user brief: ${userNeed}. Photorealistic, 1024x1024.`;
   }
 
+  // 品牌规范注入：节点被 applyBrand 标记后，按品牌色板/字体/禁用元素出图
+  if(node.brand){
+    const b=BRANDS.find(x=>x.nm===node.brand);
+    if(b)core+=` Brand guideline: use palette ${b.color.join(", ")}, font ${b.font}, strictly avoid ${b.ban}.`;
+  }
+
+  // 审片反馈注入：打回重做时参考上次的批注原因修正画面（越改越对闭环）
+  if(feedback&&String(feedback).trim()){
+    core+=` IMPORTANT REVISION: the client rejected the previous version with this feedback: "${String(feedback).trim()}". Please adjust the composition, colors or details accordingly and FIX the issue mentioned.`;
+  }
+
   // 通用负面清单：所有行业都适用
   let negative=`STRICTLY EXCLUDE: factories, production lines, machinery, industrial equipment, robots, on-screen text, watermarks, logos, blurry subjects, unrelated scenery, vehicles, excessive clutter.`;
   // 行业动态负面词：按用户需求自动追加，避免干扰其他行业
@@ -1251,6 +1264,7 @@ Same composition, only color grading changed. Photorealistic, 1024x1024.`;
 
   const assetHint=selectedAssets.length?`Input / reference materials: ${selectedAssets.join(", ")}.`:"";
   const styleHint=paramTxt?`Style parameters: ${paramTxt}.`:"";
+  const fbHint=(feedback&&String(feedback).trim())?`审片反馈（需修正）：${feedback}`:"";
 
   return `[English visual instruction - primary]
 ${core}
@@ -1259,7 +1273,7 @@ ${negative}
 [Chinese context - reference]
 用户原始需求：${userNeed}
 当前生产步骤：${role}${paramTxt?"（参数："+paramTxt+"）":""}
-${upstream}${assetHint}${styleHint}
+${upstream}${assetHint}${styleHint}${fbHint}
 要求：画面主体明确、风格一致、构图合理、画质高清。`;
 }
 async function startRun(){
@@ -1311,11 +1325,11 @@ function finishRun(wf,ctx){
   }
   const revCount=ctx.reviews?ctx.reviews.length:0;
   logs.push("["+nowStr()+"] ✔ 运行结束"+(revCount?("（"+revCount+" 次审片 · "):"（")+"消耗 ¥"+ctx.cost.toFixed(2)+"）");
-  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:100,s:"已交付",st:"p-teal",imgUrl:ctx.imgUrl||null});
+  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:revCount?60:100,s:revCount?"待客户审片":"已交付",st:revCount?"p-amber":"p-teal",imgUrl:ctx.imgUrl||null});
   runState.seq++;
   const durMin=1+Math.floor(Math.random()*4),durSec=Math.floor(Math.random()*60);
   RUNS.unshift({id:"RUN-"+Math.floor(2042+Math.random()*800),nm:wf.lineName,st:"成功",cls:"p-teal",time:nowStr().slice(0,16),dur:durMin+"m"+String(durSec).padStart(2,"0")+"s",cost:"¥"+ctx.cost.toFixed(2),nodes:wf.nodes.length,logs});
-  refreshStats();renderDeliv();renderRuns();
+  refreshStats();renderDeliv();renderRuns();saveState();
   setRunStatus("✔ 运行成功 · 产出已交付（审片台 / 交付管理 / 运行记录可查）","");
 }
 function reviewPass(id){
@@ -1324,19 +1338,34 @@ function reviewPass(id){
   r.s="已通过";
   const pend=runState.pending;
   if(pend&&pend.reviewId===id){pend.reviewId=null;renderReview();setTimeout(continueRun,400);}
-  else{renderReview();renderDeliv();setRunStatus("✔ 已通过","");}
+  else{renderReview();renderDeliv();syncDelivFromReview();setRunStatus("✔ 已通过","");}
+}
+/* 审片状态同步到交付管理（按成片 imgUrl 匹配） */
+function syncDelivFromReview(){
+  REVIEW.forEach(r=>{
+    if(!r.imgUrl)return;
+    const d=DELIV.find(x=>x.imgUrl===r.imgUrl);
+    if(!d)return;
+    d.s=r.s==="已通过"?"已交付":r.s==="已打回重做"?"已打回重做":d.s;
+    d.st=r.s==="已通过"?"p-teal":r.s==="已打回重做"?"p-coral":"p-amber";
+  });
+  saveState();
 }
 function reviewReject(id){
   const r=REVIEW.find(x=>x.id===id);
   if(!r)return;
+  // 读取审片批注作为打回原因，注入重做环节（越改越对闭环）
+  const annot=document.querySelector("#revDetail .annot");
+  const fb=(annot&&annot.value&&annot.value.trim())?annot.value.trim():(r.req||"画面需要优化");
+  r.req=fb;
   r.s="已打回重做";
   r.rounds=(r.rounds||1)+1;
   const pend=runState.pending;
   if(pend&&pend.reviewId===id){
-    pend.reviewId=null;pend.backTo=r.backTo;
+    pend.reviewId=null;pend.backTo=r.backTo;pend.feedback=fb;
     renderReview();
     setTimeout(rerunSegment,500);
-  }else{renderReview();setRunStatus("↩ 已打回重做","warn");}
+  }else{renderReview();renderDeliv();syncDelivFromReview();setRunStatus("↩ 已打回重做","warn");}
 }
 function refreshStats(){
   const qs=document.querySelectorAll("#view-home .stat .n");
@@ -1367,11 +1396,41 @@ function finishPublish(){
     if(i>=ids.length){clearInterval(t);setTimeout(()=>{alert("发布成功：Skill「商品图智能抠图」已上架能力池，所有引用它的生产线将自动更新。");closePublish();},400);}},450);
 }
 
+/* ============ 状态持久化（localStorage）：刷新不丢 ============ */
+const LS_KEY="va_state_v1";
+function saveState(){
+  try{
+    const s={TEMPLATES,TPLS,DELIV,REVIEW,RUNS,MEDIA,CHANNELS,selectedAssets,selectedAssetUrls};
+    localStorage.setItem(LS_KEY,JSON.stringify(s));
+  }catch(_){}
+}
+function loadState(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw)return;
+    const s=JSON.parse(raw);
+    if(s.TEMPLATES&&Object.keys(s.TEMPLATES).length)Object.assign(TEMPLATES,s.TEMPLATES);
+    if(Array.isArray(s.TPLS)&&s.TPLS.length){TPLS.splice(0,TPLS.length,...s.TPLS);}
+    if(Array.isArray(s.DELIV))DELIV.splice(0,DELIV.length,...s.DELIV);
+    if(Array.isArray(s.REVIEW))REVIEW.splice(0,REVIEW.length,...s.REVIEW);
+    if(Array.isArray(s.RUNS))RUNS.splice(0,RUNS.length,...s.RUNS);
+    if(Array.isArray(s.MEDIA)&&s.MEDIA.length)MEDIA.splice(0,MEDIA.length,...s.MEDIA);
+    if(Array.isArray(s.CHANNELS)&&s.CHANNELS.length)CHANNELS.splice(0,CHANNELS.length,...s.CHANNELS);
+    if(Array.isArray(s.selectedAssets)){selectedAssets.splice(0,selectedAssets.length,...s.selectedAssets);}
+    if(Array.isArray(s.selectedAssetUrls)){selectedAssetUrls.splice(0,selectedAssetUrls.length,...s.selectedAssetUrls);}
+  }catch(_){}
+}
+
 /* init */
+loadState();
 renderSkillLib();
 renderReview();
 renderRuns();
 renderBrand();
+renderTpl();
+renderDeliv();
+renderChannels();
+renderMedia("all");
 </script>
 </body>
 </html>
