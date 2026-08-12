@@ -291,11 +291,13 @@
       <div class="wb">
         <div class="card">
           <h3>描述你想搭建的视觉内容智能体</h3>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+            <button class="btn ghost" style="padding:4px 12px;font-size:12px" onclick="openAssetPicker()">从素材库选素材</button>
+          </div>
           <div id="linesAssetBar" style="display:none;margin-bottom:10px;padding:8px 10px;background:#eef3fd;border:1px dashed var(--primary);border-radius:8px">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span id="linesAssetText" style="font-size:12px;color:var(--primary-d);font-weight:500"></span>
               <span id="linesAssetThumbs" style="display:flex;gap:6px;align-items:center"></span>
-              <button class="btn ghost" style="margin-left:auto;padding:4px 10px;font-size:12px" onclick="openAssetPicker()">从素材库选</button>
             </div>
           </div>
           <textarea id="prompt" placeholder="例如：帮我搭一条商品图生产线，原图进来先分类，再智能抠图，按抖音规范调色，用 AIGC 补场景，合规不过就打回重做，最后发到各平台"></textarea>
