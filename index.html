@@ -174,12 +174,6 @@
   .run-row .nm{flex:1;font-size:13px}
   .run-detail{margin-top:16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;display:none}
   .log{font-family:monospace;font-size:12px;background:#0f1b2d;color:#d6e2f3;padding:12px;border-radius:8px;white-space:pre-wrap;line-height:1.7;max-height:240px;overflow:auto}
-  /* brand */
-  .brand-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-  .brand-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
-  .swatch-row{display:flex;gap:8px;margin:10px 0}
-  .swatch{width:40px;height:40px;border-radius:8px;border:1px solid var(--border)}
-  .brand-card .kv{font-size:12px;color:var(--muted);line-height:1.8}
   /* account */
   .acct-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
   .usage-bar{height:10px;background:#eef1f6;border-radius:6px;overflow:hidden;margin-top:6px}
@@ -199,7 +193,6 @@
   body.role-viewer .nav-item[data-view="settings"],
   body.role-viewer .nav-item[data-view="account"],
   body.role-viewer .nav-item[data-view="skills"],
-  body.role-viewer .nav-item[data-view="brand"]{display:none}
   body.role-viewer .edit-only{display:none!important}
   /* responsive (mobile review etc.) */
   @media(max-width:880px){
@@ -230,7 +223,6 @@
       <div class="nav-item" data-view="delivery"><span class="ico">📮</span>交付管理</div>
       <div class="nav-item" data-view="review"><span class="ico">🔍</span>审片台</div>
       <div class="nav-item" data-view="runs"><span class="ico">📊</span>运行记录</div>
-      <div class="nav-item" data-view="brand"><span class="ico">🎨</span>品牌中心</div>
       <div class="nav-item" data-view="account"><span class="ico">👤</span>账户与集成</div>
       <div class="nav-item" data-view="settings"><span class="ico">⚙️</span>设置</div>
     </nav>
@@ -348,46 +340,6 @@
         <div id="pickerGrid" style="overflow-y:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1;min-height:180px"></div>
         <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
           <button class="btn ghost" onclick="closeAssetPicker()">完成</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 品牌编辑弹窗 -->
-    <div id="brandModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:999;align-items:center;justify-content:center">
-      <div style="background:#fff;border-radius:12px;width:520px;max-width:94vw;max-height:90vh;overflow-y:auto;padding:18px;box-sizing:border-box">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <h3 id="brandModalTitle" style="font-size:14px;font-weight:500;color:var(--ink)">新建品牌</h3>
-          <span onclick="closeBrandModal()" style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1">×</span>
-        </div>
-        <div style="font-size:13px;display:flex;flex-direction:column;gap:10px">
-          <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">品牌名称</label><input id="bName" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box" placeholder="如：旗舰店品牌规范"></div>
-          <div>
-            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">品牌色板（点色块换色，可增删）</label>
-            <div id="bColors" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"></div>
-            <button class="btn sm ghost" style="margin-top:6px" onclick="addBrandColor()">＋ 添加色块</button>
-          </div>
-          <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">字体规范</label><input id="bFont" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box" placeholder="如：思源黑体 / 阿里普惠"></div>
-          <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Logo 描述</label><input id="bLogo" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box" placeholder="如：VA-红"></div>
-          <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">禁用元素（出图时严格规避）</label><input id="bBan" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box" placeholder="如：禁止人脸入镜、禁止水印叠加"></div>
-        </div>
-        <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
-          <button class="btn ghost" onclick="closeBrandModal()">取消</button>
-          <button class="btn" onclick="saveBrandModal()">保存品牌</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 品牌应用节点选择弹窗 -->
-    <div id="brandApplyModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:999;align-items:center;justify-content:center">
-      <div style="background:#fff;border-radius:12px;width:520px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;padding:18px;box-sizing:border-box">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <h3 id="brandApplyTitle" style="font-size:14px;font-weight:500;color:var(--ink)">应用品牌到节点</h3>
-          <span onclick="closeBrandApplyModal()" style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1">×</span>
-        </div>
-        <div id="brandApplyList" style="overflow-y:auto;flex:1;min-height:120px;display:flex;flex-direction:column;gap:8px"></div>
-        <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
-          <button class="btn ghost" onclick="closeBrandApplyModal()">取消</button>
-          <button class="btn" onclick="confirmApplyBrand()">应用</button>
         </div>
       </div>
     </div>
@@ -510,16 +462,6 @@ height: int</textarea></div>
       </div>
       <div class="runs-list" id="runsList"></div>
       <div class="run-detail" id="runDetail"></div>
-    </section>
-
-    <!-- BRAND CENTER -->
-    <section class="view" id="view-brand">
-      <div class="hint">品牌中心：统一管理品牌视觉规范（品牌色、字体、Logo、禁用元素），供「AI 调色 / 场景生成 / 文案生成」等 Skill 引用，保证跨生产线输出风格一致。让平台从单点流水线升级为「任意视觉团队的品牌化生产平台」。</div>
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-        <button class="btn" onclick="openBrandModal()">＋ 新建品牌</button>
-        <span class="hint" style="font-size:12px">品牌可应用到任意图像节点，出图时自动注入色板 / 字体 / 禁用元素；点「生成品牌示例图」可预览品牌风格</span>
-      </div>
-      <div class="brand-grid" id="brandGrid"></div>
     </section>
 
     <!-- ACCOUNT & INTEGRATIONS -->
@@ -648,7 +590,7 @@ const TEMPLATES = {
       {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"上传菜品原图",desc:"由餐饮运营发起"},
       {id:"a",x:400,y:150,type:"Agent",skill:"图片分类",title:"识别菜品类型",desc:"热菜/甜点分流"},
       {id:"b",x:400,y:260,type:"Agent",skill:"智能抠图",title:"抠出菜品主体",desc:"干净背景"},
-      {id:"c",x:400,y:370,type:"Agent",skill:"AI 调色",title:"统一暖色调",desc:"品牌视觉规范"},
+      {id:"c",x:400,y:370,type:"Agent",skill:"AI 调色",title:"统一暖色调",desc:"统一画面调性"},
       {id:"d",x:400,y:480,type:"Agent",skill:"场景生成",title:"补餐厅氛围",desc:"生成探店图"},
       {id:"e",x:400,y:590,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
       {id:"f",x:400,y:700,type:"Agent",skill:"多平台发布",title:"发小红书九宫格",desc:"通过即发"}
@@ -656,7 +598,7 @@ const TEMPLATES = {
   "广告物料批产":{nodes:[
       {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"上传活动主视觉",desc:"由营销发起"},
       {id:"a",x:400,y:150,type:"Agent",skill:"图片分类",title:"识别素材类型",desc:"KV/产品分流"},
-      {id:"b",x:400,y:260,type:"Agent",skill:"AI 调色",title:"统一活动色调",desc:"品牌色规范"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"AI 调色",title:"统一活动色调",desc:"统一活动主视觉调性"},
       {id:"c",x:400,y:370,type:"Agent",skill:"文案生成",title:"生成多版海报文案",desc:"A/B 文案"},
       {id:"d",x:400,y:480,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
       {id:"e",x:230,y:600,type:"Agent",skill:"多平台发布",title:"分发各渠道",desc:"信息流+朋友圈"},
@@ -710,12 +652,6 @@ let RUNS = [
   {id:"RUN-2038",nm:"婚纱写真交付 · 客户 A",st:"待审片",cls:"p-amber",time:"2026-08-11 10:31",dur:"4m20s",cost:"¥0.78",nodes:5}
 ];
 
-const BRANDS = [
-  {nm:"旗舰店品牌规范",color:["#E63946","#F1FAEE","#1D3557"],font:"思源黑体 / 阿里普惠",logo:"VA-红",ban:"禁止人脸入镜、禁止水印叠加",used:"商品图生产线、自媒体矩阵线"},
-  {nm:"餐饮探店规范",color:["#F4A261","#E76F51","#264653"],font:"站酷快乐体",logo:"VA-橙",ban:"禁止过度滤镜、禁止文字压图",used:"美食探店图"},
-  {nm:"民宿空间规范",color:["#A8DADC","#457B9D","#2A9D8F"],font:"苹方 / 思源宋体",logo:"VA-青",ban:"禁止畸变广角、禁止饱和过载",used:"地产民宿空间图"}
-];
-
 const CHANNELS = [
   {n:"抖音",ic:"🎵",s:"已连接",on:true},
   {n:"小红书",ic:"📕",s:"已连接",on:true},
@@ -725,7 +661,7 @@ const CHANNELS = [
 ];
 
 /* ============ 导航 ============ */
-const CRUMB = {home:"工作台",lines:"生产线",skills:"技能工坊",media:"素材库",templates:"模板中心",delivery:"交付管理",review:"审片台",runs:"运行记录",brand:"品牌中心",account:"账户与集成",settings:"设置"};
+const CRUMB = {home:"工作台",lines:"生产线",skills:"技能工坊",media:"素材库",templates:"模板中心",delivery:"交付管理",review:"审片台",runs:"运行记录",account:"账户与集成",settings:"设置"};
 function goView(v){
   document.querySelectorAll(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.view===v));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
@@ -737,7 +673,6 @@ function goView(v){
   if(v==="delivery") renderDeliv();
   if(v==="review") renderReview();
   if(v==="runs") renderRuns();
-  if(v==="brand") renderBrand();
   if(v==="account") renderChannels();
 }
 document.querySelectorAll(".nav-item").forEach(n=>n.onclick=()=>goView(n.dataset.view));
@@ -960,153 +895,6 @@ ${r.st==='打回重做'?'[14:23:10] ↩ 回到「AI 调色」重做\n':'[14:23:0
     <div style="margin-top:12px;font-size:12px;color:var(--muted)">节点级日志</div>
     <div class="log">${logs}</div>`;
 }
-function renderBrand(){
-  document.getElementById("brandGrid").innerHTML=BRANDS.map((b,i)=>{
-    const refs=brandRefCount(i);
-    return `<div class="brand-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-      <h4 style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.nm}</h4>
-      <div style="display:flex;gap:6px;flex:none">
-        <span class="btn sm ghost edit-only" style="padding:2px 8px;font-size:11px" onclick="editBrand(${i})">编辑</span>
-        <span class="btn sm ghost edit-only" style="padding:2px 8px;font-size:11px" onclick="delBrand(${i})">删除</span>
-      </div>
-    </div>
-    <div class="swatch-row">${(b.color||[]).map(c=>`<div class="swatch" style="background:${c}" title="${c}"></div>`).join("")}</div>
-    <div class="kv">字体：${b.font}<br>Logo：${b.logo}<br>禁用：${b.ban}<br>引用：<b>${refs.n}</b> 条生产线${refs.list?("（"+refs.list+"）"):""}</div>
-    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
-      <button class="btn sm ghost edit-only" onclick="applyBrand(${i})">应用到生产线节点</button>
-      <button class="btn sm ghost" onclick="genBrandSample(${i})">生成品牌示例图</button>
-    </div>
-    <div id="brandSample${i}"></div>
-  </div>`;
-  }).join("");
-}
-/* 品牌真实引用统计（遍历已保存生产线与当前工作流） */
-function brandRefCount(i){
-  const nm=BRANDS[i]&&BRANDS[i].nm;
-  let n=0,list=[];
-  Object.keys(TEMPLATES).forEach(k=>{
-    const wf=TEMPLATES[k];
-    if(wf&&Array.isArray(wf.nodes)&&wf.nodes.some(nd=>nd.brand===nm)){n++;list.push(k);}
-  });
-  if(currentWF&&currentWF.nodes&&currentWF.nodes.some(nd=>nd.brand===nm)&&list.indexOf(currentWF.lineName)<0){n++;list.push(currentWF.lineName);}
-  return {n,list:list.slice(0,2).join("、")+(list.length>2?" 等":"")};
-}
-/* 品牌 CRUD：新建 / 编辑 / 删除 */
-let brandEditIdx=-1;
-function openBrandModal(){
-  brandEditIdx=-1;
-  document.getElementById("brandModalTitle").textContent="新建品牌";
-  document.getElementById("bName").value="";
-  document.getElementById("bFont").value="";
-  document.getElementById("bLogo").value="";
-  document.getElementById("bBan").value="";
-  document.getElementById("bColors").innerHTML="";
-  addBrandColor();addBrandColor();addBrandColor();
-  document.getElementById("brandModal").style.display="flex";
-}
-function editBrand(i){
-  brandEditIdx=i;
-  const b=BRANDS[i];
-  if(!b)return;
-  document.getElementById("brandModalTitle").textContent="编辑品牌："+b.nm;
-  document.getElementById("bName").value=b.nm;
-  document.getElementById("bFont").value=b.font||"";
-  document.getElementById("bLogo").value=b.logo||"";
-  document.getElementById("bBan").value=b.ban||"";
-  document.getElementById("bColors").innerHTML="";
-  (b.color&&b.color.length?b.color:["#2B67EC"]).forEach(()=>addBrandColor());
-  document.getElementById("brandModal").style.display="flex";
-}
-function closeBrandModal(){document.getElementById("brandModal").style.display="none";}
-function addBrandColor(){
-  const box=document.createElement("div");
-  box.style.cssText="display:flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:8px;padding:4px 6px;background:#fff";
-  box.innerHTML=`<input type="color" value="#2B67EC" style="width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0">
-    <span onclick="this.parentNode.remove()" style="cursor:pointer;color:var(--muted);font-size:14px;padding:0 2px">×</span>`;
-  document.getElementById("bColors").appendChild(box);
-}
-function saveBrandModal(){
-  const nm=document.getElementById("bName").value.trim();
-  if(!nm){alert("请填写品牌名称");return;}
-  const colors=[...document.querySelectorAll("#bColors input[type=color]")].map(i=>i.value);
-  if(!colors.length){alert("请至少保留一个品牌色");return;}
-  const font=document.getElementById("bFont").value.trim()||"默认字体";
-  const logo=document.getElementById("bLogo").value.trim()||"—";
-  const ban=document.getElementById("bBan").value.trim()||"无";
-  if(brandEditIdx>=0){
-    const b=BRANDS[brandEditIdx];
-    const old=b.nm;
-    // 品牌改名时同步更新所有已引用它的节点
-    Object.keys(TEMPLATES).forEach(k=>{(TEMPLATES[k].nodes||[]).forEach(nd=>{if(nd.brand===old)nd.brand=nm;});});
-    if(currentWF&&currentWF.nodes)currentWF.nodes.forEach(nd=>{if(nd.brand===old)nd.brand=nm;});
-    Object.assign(b,{nm,color:colors,font,logo,ban});
-  }else{
-    BRANDS.push({nm,color:colors,font,logo,ban,used:""});
-  }
-  closeBrandModal();renderBrand();saveState();
-  alert("品牌「"+nm+"」已保存 ✓"+(brandEditIdx>=0?"（已同步更新引用节点）":""));
-}
-function delBrand(i){
-  const b=BRANDS[i];
-  if(!b)return;
-  if(!confirm("删除品牌「"+b.nm+"」？已引用它的节点会保留品牌名但不再注入品牌规范。"))return;
-  BRANDS.splice(i,1);
-  renderBrand();saveState();
-}
-/* 品牌 → 当前工作流节点联动（弹窗多选：调色/场景/抠图等任意节点） */
-let applyBrandIdx=-1;
-function applyBrand(i){
-  if(!currentWF){alert("请先在「生产线」页生成工作流，再应用品牌");return;}
-  applyBrandIdx=i;
-  const b=BRANDS[i];
-  document.getElementById("brandApplyTitle").textContent="应用品牌「"+b.nm+"」到节点";
-  const nodes=currentWF.nodes||[];
-  document.getElementById("brandApplyList").innerHTML=nodes.map((n,ix)=>{
-    const match=/调色|调性|风格|场景|抠图/i.test((n.title||"")+(n.skill||""));
-    const checked=(n.brand===b.nm)||match;
-    return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;box-sizing:border-box">
-      <input type="checkbox" data-bx="${ix}" ${checked?"checked":""} style="accent-color:var(--primary);flex:none">
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.type} · ${n.title}<span style="color:var(--muted);font-size:11px">（${n.skill||"无 Skill"}）</span></span>
-      ${n.brand===b.nm?'<span style="font-size:11px;color:var(--coral);flex:none">已引用</span>':''}
-    </label>`;
-  }).join("")||"<div class='hint' style='font-size:12px'>当前工作流没有节点，请先生成工作流</div>";
-  document.getElementById("brandApplyModal").style.display="flex";
-}
-function closeBrandApplyModal(){document.getElementById("brandApplyModal").style.display="none";}
-function confirmApplyBrand(){
-  const b=BRANDS[applyBrandIdx];
-  if(!currentWF||!b)return;
-  let hit=0;
-  document.querySelectorAll("#brandApplyList input[type=checkbox]").forEach(cb=>{
-    const ix=parseInt(cb.dataset.bx,10);
-    const n=currentWF.nodes[ix];
-    if(!n)return;
-    if(cb.checked){n.brand=b.nm;hit++;}
-    else if(n.brand===b.nm){delete n.brand;}
-  });
-  currentWF.lineName=currentWF.lineName||"生产线";
-  if(!/（品牌：/.test(currentWF.lineName))currentWF.lineName+="（品牌："+b.nm+"）";
-  TEMPLATES[currentWF.lineName]=JSON.parse(JSON.stringify(currentWF));
-  currentTplName=currentWF.lineName;
-  renderWorkflow(currentTplName);renderBrand();saveState();closeBrandApplyModal();
-  alert("品牌「"+b.nm+"」已应用到 "+hit+" 个节点 ✓（出图时自动注入色板 / 字体 / 禁用元素）");
-}
-/* 品牌示例图：用品牌色板 / 字体 / 禁用词构造 prompt 调真实出图 */
-async function genBrandSample(i){
-  const b=BRANDS[i];
-  const el=document.getElementById("brandSample"+i);
-  if(!el)return;
-  el.innerHTML='<div class="hint" style="font-size:12px;color:var(--primary-d)">🎨 正在用品牌规范生成示例图…</div>';
-  const prompt=`Generate a brand identity sample image for a product poster.
-Palette: strictly use these colors: ${(b.color||[]).join(", ")}.
-Typography: ${b.font}.
-Composition: a clean, modern product mockup / poster showing the brand's visual identity, generous white space, consistent color blocking.
-STRICTLY EXCLUDE: ${b.ban}. Photorealistic or flat-design poster style, 1024x1024.`;
-  const r=await fetchRealImage(prompt,[]);
-  if(r&&r.url)el.innerHTML=`<img src="${r.url}" style="width:100%;margin-top:10px;border-radius:8px;border:1px solid var(--border);display:block">`;
-  else el.innerHTML='<div class="hint" style="font-size:12px;color:var(--coral)">示例图生成失败：'+(r&&r.note?r.note:"图像服务暂不可用")+'</div>';
-}
 function renderChannels(){document.getElementById("channelList").innerHTML=CHANNELS.map((c,i)=>`
   <div class="channel"><div class="dotc">${c.ic}</div>
     <div class="ci"><div class="cn">${c.n}</div><div class="cs ${c.on?'connected':''}">${c.s}</div></div>
@@ -1159,9 +947,8 @@ function selectNode(id){
   document.getElementById("node-"+id).classList.add("node-selected");
   const n=currentNodes.find(x=>x.id===id);
   const so=SKILLS.find(s=>s.name===n.skill)||{in:"—",out:"—",desc:n.desc};
-  const brandLine=n.brand?`<div class="skill" style="color:var(--coral)">🎨 引用品牌：${n.brand}</div>`:"";
   document.getElementById("prop").innerHTML=`
-    <h3>${n.title}</h3><div class="skill">${n.type} · 调用 Skill：${n.skill}</div>${brandLine}
+    <h3>${n.title}</h3><div class="skill">${n.type} · 调用 Skill：${n.skill}</div>
     <label>节点名称</label><input value="${n.title}">
     <label>使用 Skill</label><select>${SKILLS.map(s=>`<option ${s.name===n.skill?"selected":""}>${s.name}</option>`).join("")}</select>
     <label>参数配置（演示）</label><input value="${n.desc}">
@@ -1436,12 +1223,6 @@ Same composition, only color grading changed. Photorealistic, 1024x1024.`;
     core=`Generate a high-quality image that strictly matches the user brief: ${userNeed}. Photorealistic, 1024x1024.`;
   }
 
-  // 品牌规范注入：节点被 applyBrand 标记后，按品牌色板/字体/禁用元素出图
-  if(node.brand){
-    const b=BRANDS.find(x=>x.nm===node.brand);
-    if(b)core+=` Brand guideline: use palette ${b.color.join(", ")}, font ${b.font}, strictly avoid ${b.ban}.`;
-  }
-
   // 审片反馈注入：打回重做时参考上次的批注原因修正画面（越改越对闭环）
   if(feedback&&String(feedback).trim()){
     core+=` IMPORTANT REVISION: the client rejected the previous version with this feedback: "${String(feedback).trim()}". Please adjust the composition, colors or details accordingly and FIX the issue mentioned.`;
@@ -1598,7 +1379,7 @@ function finishPublish(){
 const LS_KEY="va_state_v1";
 function saveState(){
   try{
-    const s={TEMPLATES,TPLS,DELIV,REVIEW,RUNS,MEDIA,CHANNELS,BRANDS,selectedAssets,selectedAssetUrls};
+    const s={TEMPLATES,TPLS,DELIV,REVIEW,RUNS,MEDIA,CHANNELS,selectedAssets,selectedAssetUrls};
     localStorage.setItem(LS_KEY,JSON.stringify(s));
   }catch(_){}
 }
@@ -1614,7 +1395,6 @@ function loadState(){
     if(Array.isArray(s.RUNS))RUNS.splice(0,RUNS.length,...s.RUNS);
     if(Array.isArray(s.MEDIA)&&s.MEDIA.length)MEDIA.splice(0,MEDIA.length,...s.MEDIA);
     if(Array.isArray(s.CHANNELS)&&s.CHANNELS.length)CHANNELS.splice(0,CHANNELS.length,...s.CHANNELS);
-    if(Array.isArray(s.BRANDS)&&s.BRANDS.length)BRANDS.splice(0,BRANDS.length,...s.BRANDS);
     if(Array.isArray(s.selectedAssets)){selectedAssets.splice(0,selectedAssets.length,...s.selectedAssets);}
     if(Array.isArray(s.selectedAssetUrls)){selectedAssetUrls.splice(0,selectedAssetUrls.length,...s.selectedAssetUrls);}
   }catch(_){}
@@ -1625,7 +1405,6 @@ loadState();
 renderSkillLib();
 renderReview();
 renderRuns();
-renderBrand();
 renderTpl();
 renderDeliv();
 renderChannels();
