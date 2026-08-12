@@ -1082,7 +1082,9 @@ async function fetchRealImage(prompt){
   }catch(e){return null;}
 }
 function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
-/* 为图像生成节点构造高质量 prompt：英文视觉指令（CogView 训练数据以英文为主）+ 中文上下文 + 强制负面清单 */
+/* 为图像生成节点构造高质量 prompt：
+   - 通用结构：英文视觉指令 + 中文上下文 + 通用负面清单（对所有指令生效）
+   - 动态行业词：按用户需求关键词自动追加对应负面词（食品/人像/空间类），互不干扰 */
 function buildImagePrompt(node,wf,order,idx){
   const userNeed=(window.lastUserPrompt||wf.lineName||"").trim();
   const role=(node.skill||node.title||"").trim();
@@ -1097,12 +1099,12 @@ function buildImagePrompt(node,wf,order,idx){
   if(prevSkills.has("智能抠图")||prevSkills.has("抠图"))upstream+="前置「智能抠图」已完成，商品主体已抠出，生成时请把商品主体自然融入场景，不要改变或遮挡主体。";
   if(prevSkills.has("AI调色"))upstream+="前置「AI调色」已完成，请保持当前整体色调风格。";
 
-  // 核心英文视觉指令（CogView 对英文 prompt 语义最敏感）
+  // 核心英文视觉指令（CogView 对英文 prompt 语义最敏感）；主体从用户需求里读，不写死品类
   let core="";
   if(/场景生成/i.test(role)){
-    core=`Professional e-commerce product photography.
-Main subject: the final consumer product described by the user brief (e.g. a cup of coffee, a bottled drink, a packaged item) — NEVER raw materials, NEVER beans/leaves/grains, NEVER industrial scene.
-Setting: the product is placed on a warm-toned wooden table/desk, soft natural daylight from the side, shallow depth of field, clean simple background, cozy warm atmosphere.
+    core=`Professional e-commerce product photography of the main product described in the user brief: ${userNeed}.
+Main subject: the final consumer product itself — NEVER raw materials, NEVER a factory, NEVER an industrial scene.
+Setting: the product is placed in a clean, attractive scene that matches the user brief (e.g. wooden table with warm tones if the brief mentions them), soft natural lighting, shallow depth of field, tidy background, cozy atmosphere.
 Composition: centered subject, slight 45-degree angle, product-focused shot, generous negative space.
 Quality: studio-grade, sharp focus on product, 1024x1024, photorealistic.`;
   } else if(/AI调色|调色/i.test(role)){
@@ -1115,8 +1117,18 @@ Same composition, only color grading changed. Photorealistic, 1024x1024.`;
     core=`Generate a high-quality image that strictly matches the user brief: ${userNeed}. Photorealistic, 1024x1024.`;
   }
 
-  // 强制负面清单（防跑偏到咖啡豆工厂、流水线等）
-  const negative=`STRICTLY EXCLUDE: factories, production lines, machinery, industrial equipment, robots, raw materials (coffee beans, tea leaves, grains, powders, ingredients), workers, crowds, multiple unrelated people, on-screen text, watermarks, logos, blurry subjects, unrelated scenery, vehicles.`;
+  // 通用负面清单：所有行业都适用
+  let negative=`STRICTLY EXCLUDE: factories, production lines, machinery, industrial equipment, robots, on-screen text, watermarks, logos, blurry subjects, unrelated scenery, vehicles, excessive clutter.`;
+  // 行业动态负面词：按用户需求自动追加，避免干扰其他行业
+  if(/咖啡|茶|食品|零食|农产品|粮油|生鲜|食材|水果|饮料|茶叶/i.test(userNeed)){
+    negative+=` Do NOT show raw materials such as coffee beans, tea leaves, grains, powders, unprocessed ingredients, farms, plantations.`;
+  }
+  if(/婚纱|人像|模特|写真|人物|婚礼|美妆/i.test(userNeed)){
+    negative+=` Do NOT add crowds, bystanders, strangers, or more than one person.`;
+  }
+  if(/地产|民宿|空间|楼盘|室内|家具|样板/i.test(userNeed)){
+    negative+=` Do NOT add construction sites, unfinished rooms, or oversized furniture that blocks the view.`;
+  }
 
   const assetHint=selectedAssets.length?`Input / reference materials: ${selectedAssets.join(", ")}.`:"";
   const styleHint=paramTxt?`Style parameters: ${paramTxt}.`:"";
