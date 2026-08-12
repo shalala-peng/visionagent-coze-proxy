@@ -1168,7 +1168,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
       ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
       setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
       const imgPrompt=buildImagePrompt(n,wf,order,i,ctx.feedback);
-      const imgUrl=await fetchRealImage(imgPrompt);
+      const imgUrl=await fetchRealImage(imgPrompt, selectedAssetUrls.filter(Boolean));
       if(imgUrl){ctx.imgUrl=imgUrl;ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → AI 出图完成");}
       else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
       if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
@@ -1193,10 +1193,12 @@ function pushReviewTask(wf,condNode,ctx){
   return item.id;
 }
 /* 真实 AI 图像生成：fetch 云函数 mode:"image"，30s 超时，失败返回 null */
-async function fetchRealImage(prompt){
+async function fetchRealImage(prompt,images){
   try{
-    const ctrl=new AbortController(),tm=setTimeout(()=>ctrl.abort(),30000);
-    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"image",prompt}),signal:ctrl.signal});
+    const ctrl=new AbortController(),tm=setTimeout(()=>ctrl.abort(),60000);
+    const body={mode:"image",prompt};
+    if(Array.isArray(images)&&images.length)body.images=images.filter(Boolean);
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:ctrl.signal});
     clearTimeout(tm);
     const d=await res.json();
     return (d&&d.ok&&d.url)?d.url:null;
@@ -1262,7 +1264,7 @@ Same composition, only color grading changed. Photorealistic, 1024x1024.`;
     negative+=` Do NOT add construction sites, unfinished rooms, or oversized furniture that blocks the view.`;
   }
 
-  const assetHint=selectedAssets.length?`Input / reference materials: ${selectedAssets.join(", ")}.`:"";
+  const assetHint=selectedAssets.length?`Reference image(s) of the REAL product are provided: ${selectedAssets.join(", ")}. CRITICAL: preserve the product's exact identity/shape/material from the reference; only change scene, color tone or background as instructed.`:"";
   const styleHint=paramTxt?`Style parameters: ${paramTxt}.`:"";
   const fbHint=(feedback&&String(feedback).trim())?`审片反馈（需修正）：${feedback}`:"";
 
