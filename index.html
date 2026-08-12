@@ -291,6 +291,13 @@
       <div class="wb">
         <div class="card">
           <h3>描述你想搭建的视觉内容智能体</h3>
+          <div id="linesAssetBar" style="display:none;margin-bottom:10px;padding:8px 10px;background:#eef3fd;border:1px dashed var(--primary);border-radius:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span id="linesAssetText" style="font-size:12px;color:var(--primary-d);font-weight:500"></span>
+              <span id="linesAssetThumbs" style="display:flex;gap:6px;align-items:center"></span>
+              <button class="btn ghost" style="margin-left:auto;padding:4px 10px;font-size:12px" onclick="openAssetPicker()">从素材库选</button>
+            </div>
+          </div>
           <textarea id="prompt" placeholder="例如：帮我搭一条商品图生产线，原图进来先分类，再智能抠图，按抖音规范调色，用 AIGC 补场景，合规不过就打回重做，最后发到各平台"></textarea>
           <div class="chips" id="chips"></div>
           <button class="btn" id="genBtn">生成工作流</button>
@@ -324,6 +331,24 @@
         </div>
       </div>
     </section>
+
+    <!-- 素材选择弹窗（生产线页内直接选素材） -->
+    <div id="assetPicker" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:999;align-items:center;justify-content:center">
+      <div style="background:#fff;border-radius:12px;width:600px;max-width:94vw;max-height:82vh;display:flex;flex-direction:column;padding:16px;box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h3 style="font-size:14px;font-weight:500;color:var(--ink)">选择要发给 AI 的素材（点击选中，可多选）</h3>
+          <span onclick="closeAssetPicker()" style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1">×</span>
+        </div>
+        <div style="margin-bottom:10px">
+          <button class="btn" style="padding:5px 12px;font-size:12px" onclick="document.getElementById('assetFile').click()">上传图片素材</button>
+          <span class="hint" style="margin-left:8px;font-size:12px">已选 <b id="pickerCount" style="color:var(--primary-d)">0</b> 个</span>
+        </div>
+        <div id="pickerGrid" style="overflow-y:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:1;min-height:180px"></div>
+        <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+          <button class="btn ghost" onclick="closeAssetPicker()">完成</button>
+        </div>
+      </div>
+    </div>
 
     <!-- SKILLS (workshop) -->
     <section class="view" id="view-skills">
@@ -661,6 +686,7 @@ function goView(v){
   document.getElementById("view-"+v).classList.add("active");
   document.getElementById("crumb").innerHTML="VisionAgent / <b>"+CRUMB[v]+"</b>";
   if(v==="media") renderMedia("all");
+  if(v==="lines") renderLinesAssetBar();
   if(v==="templates") renderTpl();
   if(v==="delivery") renderDeliv();
   if(v==="review") renderReview();
@@ -691,6 +717,7 @@ function toggleAsset(i){
   else{selectedAssets.push(m.nm);selectedAssetUrls.push(m.url||null);}
   const active=document.querySelector("#mediaFilters .fchip.active");
   renderMedia(active?active.dataset.f:"all");
+  renderPicker();
 }
 /* 上传本地图片 → 压缩到 1024px 内 → 云函数存 COS → 拿公网 URL 加入素材库 */
 async function uploadAsset(input){
@@ -715,6 +742,7 @@ async function uploadAsset(input){
     selectedAssets.unshift(file.name);selectedAssetUrls.unshift(d.url);
     const active=document.querySelector("#mediaFilters .fchip.active");
     renderMedia(active?active.dataset.f:"all");
+    renderPicker();
   }catch(err){
     alert("素材上传失败："+(err&&err.message?err.message:err)+"\n提示：请确认云函数已配置 COS_BUCKET / COS_SECRET_ID / COS_SECRET_KEY 并重新部署。");
   }finally{
@@ -735,7 +763,58 @@ function renderMedia(f){
   if(hint)hint.innerHTML=selectedAssets.length
     ?`已选 <b style="color:var(--primary-d)">${selectedAssets.length}</b> 个素材用于本次运行：${selectedAssets.join("、")}`
     :`点击素材卡片选中，用于「运行」时作为本次生产线的输入素材`;
+  renderLinesAssetBar();
 }
+/* 生产线页「已选素材」提示条：让用户随时看到将随指令发给 AI 的图 */
+function renderLinesAssetBar(){
+  const bar=document.getElementById("linesAssetBar");
+  if(!bar)return;
+  if(!selectedAssets.length){bar.style.display="none";return;}
+  bar.style.display="";
+  document.getElementById("linesAssetText").innerHTML=`已选 <b>${selectedAssets.length}</b> 个素材，将随指令发给 AI 看图：`;
+  document.getElementById("linesAssetThumbs").innerHTML=selectedAssets.map((nm,i)=>{
+    const u=selectedAssetUrls[i];
+    const thumb=u?`<img src="${u}" style="width:28px;height:28px;border-radius:4px;object-fit:cover;border:1px solid var(--border);display:block">`
+      :`<span style="width:28px;height:28px;border-radius:4px;display:inline-block;background:var(--border)"></span>`;
+    return `<span style="position:relative;display:inline-block" title="${nm}">${thumb}
+      <span onclick="removeAsset(${i})" style="position:absolute;top:-6px;right:-6px;width:15px;height:15px;line-height:13px;text-align:center;background:#fff;border:1px solid #d0d5dd;border-radius:50%;cursor:pointer;font-size:11px;color:#666">×</span></span>`;
+  }).join("");
+}
+function removeAsset(i){
+  selectedAssets.splice(i,1);selectedAssetUrls.splice(i,1);
+  renderLinesAssetBar();
+  const active=document.querySelector("#mediaFilters .fchip.active");
+  if(active)renderMedia(active.dataset.f);
+  renderPicker();
+}
+/* 生产线页内「从素材库选」弹窗 */
+function renderPicker(){
+  const g=document.getElementById("pickerGrid");
+  if(!g)return;
+  g.innerHTML=MEDIA.map((m,i)=>{
+    const sel=selectedAssets.indexOf(m.nm)>=0;
+    const thumb=m.url?`<img src="${m.url}" style="width:100%;height:64px;object-fit:cover;display:block">`
+      :`<div style="width:100%;height:64px;background:${m.c}"></div>`;
+    return `<div onclick="pickerToggle(${i})" style="cursor:pointer;border:${sel?'1.5px solid var(--primary)':'1px solid var(--border)'};border-radius:8px;overflow:hidden;background:#fff">
+      ${thumb}
+      <div style="font-size:11px;padding:4px 6px;color:${sel?'var(--primary-d)':'var(--ink)'};font-weight:${sel?'500':'400'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.nm}${sel?' ✓':''}</div>
+    </div>`;
+  }).join("");
+  const c=document.getElementById("pickerCount");
+  if(c)c.textContent=selectedAssets.length;
+}
+function pickerToggle(i){
+  const m=MEDIA[i];
+  const idx=selectedAssets.indexOf(m.nm);
+  if(idx>=0){selectedAssets.splice(idx,1);selectedAssetUrls.splice(idx,1);}
+  else{selectedAssets.push(m.nm);selectedAssetUrls.push(m.url||null);}
+  renderPicker();
+  renderLinesAssetBar();
+  const active=document.querySelector("#mediaFilters .fchip.active");
+  if(active)renderMedia(active.dataset.f);
+}
+function openAssetPicker(){const m=document.getElementById("assetPicker");if(m){m.style.display="flex";renderPicker();}}
+function closeAssetPicker(){const m=document.getElementById("assetPicker");if(m)m.style.display="none";}
 function renderTpl(){document.getElementById("tplGrid").innerHTML=TPLS.map(t=>`
   <div class="tpl"><h4>${t.nm}</h4><p>${t.desc}</p>
   <div class="tg">${t.tg.map(x=>`<span>${x}</span>`).join("")}</div>
