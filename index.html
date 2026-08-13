@@ -246,7 +246,7 @@
         <option value="member">角色：成员</option>
         <option value="viewer">角色：只读</option>
       </select>
-      <div class="tag-demo">支持多模型切换（扣子 / DeepSeek / 通义 / 智谱 / Kimi / GPT）· 下方「底层模型」可切换 · 网络受限自动降级</div>
+      <div class="tag-demo">支持多模型切换（扣子 / DeepSeek / 通义 / 智谱 / Kimi / GPT）· 下方「拆线模型」可切换 · 网络受限自动降级</div>
       <div class="mode-toggle" id="modeToggle">
         <button class="mt-btn active" data-mode="expert" onclick="setMode('expert')">专家模式</button>
         <button class="mt-btn" data-mode="simple" onclick="setMode('simple')">极简模式</button>
@@ -320,7 +320,7 @@
             </div>
           </div>
           <div class="model-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-            <label style="font-size:13px;color:var(--muted)">底层模型</label>
+            <label style="font-size:13px;color:var(--muted)" title="仅控制「自然语言 → 生产线」的拆线编排；抠图/出图/分类/文案/审核等执行节点会自动路由到对应视觉模型">拆线模型 ⓘ</label>
             <select id="modelSelect" onchange="onModelChange()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--card)">
               <option value="coze">扣子视觉智能体（最强看图）</option>
               <option value="deepseek">DeepSeek（低成本编排）</option>
@@ -345,6 +345,13 @@
         <div class="card" id="resultCard">
           <h3>生成结果</h3>
           <p class="hint" id="resultHint">在左侧输入需求并点击「生成工作流」，这里会出现生成的流水线画布。</p>
+          <div id="clarifyForm" style="display:none;margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px dashed var(--border)">
+            <p class="hint" style="margin:0 0 8px" id="clarifyQ">智能体需要补充信息才能继续</p>
+            <input id="clarifyIndustry" placeholder="行业/场景（如：电商、婚纱、餐饮）" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)" />
+            <input id="clarifyAsset" placeholder="素材类型（如：产品图、客片、探店视频）" style="width:100%;margin-bottom:6px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)" />
+            <input id="clarifyPlatform" placeholder="目标平台（如：淘宝、小红书、抖音）" style="width:100%;margin-bottom:8px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)" />
+            <button class="btn" onclick="submitClarify()">补充并生成生产线</button>
+          </div>
           <div id="wfMount" style="display:none">
             <div class="toolbar">
               <button class="btn ghost edit-only" id="backBtn">← 返回修改</button>
@@ -499,7 +506,7 @@ height: int</textarea></div>
         <div class="stat"><div class="n" id="rpDur">—</div><div class="l">平均耗时</div></div>
         <div class="stat"><div class="n" id="rpCost">—</div><div class="l">累计消耗</div></div>
       </div>
-      <div class="hint" style="margin-top:8px">本面板指标由当前会话演示数据计算，仅用于展示「评测体系」形态，非真实业务统计。</div>
+      <div class="hint" style="margin-top:8px">本面板指标基于当前会话真实运行记录计算（成功率 / 打回率 / 耗时 / 成本），刷新页面后数据从浏览器本地恢复。</div>
       <div class="runs-list" id="runsList"></div>
       <div class="run-detail" id="runDetail"></div>
     </section>
@@ -729,6 +736,23 @@ function goView(v){
 }
 document.querySelectorAll(".nav-item").forEach(n=>n.onclick=()=>goView(n.dataset.view));
 function goLines(pre){ if(pre) document.getElementById("prompt").value=pre; goView("lines"); }
+function submitClarify(){
+  const base=window.pendingClarifyPrompt||document.getElementById("prompt").value;
+  const industry=document.getElementById("clarifyIndustry").value.trim();
+  const asset=document.getElementById("clarifyAsset").value.trim();
+  const platform=document.getElementById("clarifyPlatform").value.trim();
+  const parts=[base];
+  if(industry)parts.push("行业："+industry);
+  if(asset)parts.push("素材："+asset);
+  if(platform)parts.push("平台："+platform);
+  const newPrompt=parts.join("，");
+  document.getElementById("prompt").value=newPrompt;
+  document.getElementById("clarifyForm").style.display="none";
+  document.getElementById("clarifyIndustry").value="";
+  document.getElementById("clarifyAsset").value="";
+  document.getElementById("clarifyPlatform").value="";
+  generate();
+}
 
 /* 双模式：极简（真实用户）/ 专家（画布） */
 function setMode(m){
@@ -883,13 +907,20 @@ function renderTpl(){document.getElementById("tplGrid").innerHTML=TPLS.map(t=>`
   <div class="tpl"><h4>${t.nm}</h4><p>${t.desc}</p>
   <div class="tg">${t.tg.map(x=>`<span>${x}</span>`).join("")}</div>
   <button class="btn sm" onclick="useTpl('${t.key}')">使用模板</button></div>`).join("");}
-function renderDeliv(){document.getElementById("delivBody").innerHTML=DELIV.map(d=>{
+function renderDeliv(){document.getElementById("delivBody").innerHTML=DELIV.map((d,i)=>{
   const canReview=(d.s==="待客户审片"||d.s==="已打回重做");
-  const act=canReview?`<button class="btn sm ghost" onclick="goView('review')">去审片</button>`:`<span style="font-size:12px;color:var(--muted)">—</span>`;
+  const act=canReview?`<button class="btn sm ghost" onclick="goView('review')">去审片</button>`:`<button class="btn sm" onclick="exportDeliveryPack(${i})">导出内容包</button>`;
   const thumb=d.imgUrl?`<img src="${d.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;display:block" alt="成片">`:`<span style="font-size:11px;color:var(--muted)">—</span>`;
   return `<tr><td>${d.c}</td><td>${d.t}</td><td>${thumb}</td>
   <td><span class="bar-mini"><i style="width:${d.p}%"></i></span> ${d.p}%</td>
   <td><span class="pill ${d.st}">${d.s}</span></td><td>${act}</td></tr>`;}).join("");}
+function exportDeliveryPack(idx){
+  const d=DELIV[idx];if(!d)return;
+  const pack={name:d.c,generatedAt:d.createdAt,assets:{image:d.imgUrl||null,copy:d.copyText||"",classify:d.classify||null},note:"本内容包由 VisionAgent 当前会话生成，可导入到各平台发布后台"};
+  const blob=new Blob([JSON.stringify(pack,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download="visionagent-pack-"+(Date.now())+".json";a.click();URL.revokeObjectURL(url);
+}
 function useTpl(key){
   const t=TEMPLATES[key];
   goView("lines");
@@ -949,7 +980,7 @@ function renderRuns(){
 function refreshReviewPanel(){
   const total=Math.max(1,RUNS.length);
   const ok=RUNS.filter(r=>r.st==="成功").length;
-  const rej=RUNS.filter(r=>r.st==="打回重做"||r.st==="待审片").length;
+  const rej=RUNS.filter(r=>r.hasRework).length;
   const mins=RUNS.map(r=>parseInt(String(r.dur||"0m").split("m")[0],10)||0);
   const avg=mins.length?Math.round(mins.reduce((a,b)=>a+b,0)/mins.length):0;
   const cost=RUNS.reduce((s,r)=>s+parseFloat(String(r.cost||"0").replace("¥","")||0),0);
@@ -1083,10 +1114,10 @@ function extractFront(text){
   if(s>=0&&e>=0)t=t.slice(s,e+1);return JSON.parse(t);
 }
 const COZE_PROXY_URL="https://1466923365-czw28jkc4f.ap-guangzhou.tencentscf.com"; /* 腾讯云 SCF 函数 URL（国内云函数代理，代持 COZE_API_KEY 真调 Coze），大陆浏览器可真调，告别 Failed to fetch。改完需重新部署 CloudStudio 生效。 */
-/* 前端模型选择：用户可切换底层大模型，选择经 body.llmProvider 传给云函数（覆盖环境变量默认） */
+/* 前端模型选择：用户可切换拆线/编排大模型，选择经 body.llmProvider 传给云函数（覆盖环境变量默认）。仅控制 NL→生产线编排，执行节点自动路由到对应视觉模型。 */
 let currentModel="coze";
 function onModelChange(){const v=document.getElementById("modelSelect").value;currentModel=v;try{localStorage.setItem("va_model",v);}catch(_){}updateModelNote();}
-function updateModelNote(){const notes={coze:"Coze 视觉 bot 亲眼看素材（最强看图）",deepseek:"纯文本编排，看图需配 VISION_*（如智谱 GLM-4V）",qwen:"纯文本编排",glm:"GLM-4V 自带视觉，素材被看见",kimi:"纯文本，看图需配 VISION_*",openai:"GPT-4o 自带视觉，素材被看见"};const el=document.getElementById("modelNote");if(el)el.textContent=notes[currentModel]||"";}
+function updateModelNote(){const notes={coze:"Coze 视觉 bot 拆线编排 · 执行节点仍路由到万相/CogView/千问VL",deepseek:"DeepSeek 纯文本拆线 · 看图由 qwen-vl、出图由 CogView 等执行节点完成",qwen:"通义千问纯文本拆线 · 执行节点由 qwen-vl / 万相 / CogView 完成",glm:"智谱 GLM-4V 拆线编排 · 自带视觉，执行节点仍独立路由",kimi:"Kimi 纯文本拆线 · 执行节点由专用视觉/生成模型完成",openai:"GPT-4o 拆线编排 · 执行节点仍独立路由到对应模型"};const el=document.getElementById("modelNote");if(el){el.textContent=notes[currentModel]||"";el.title="拆线模型只决定「一句话→生产线」的编排；后续抠图/出图/分类/文案/审核会由对应视觉模型执行。";}}
 async function generate(){
   const text=document.getElementById("prompt").value.trim();
   if(!text){alert("请先描述你想搭建的视觉内容智能体 🙂");return;}
@@ -1104,16 +1135,24 @@ async function generate(){
       if(res.ok&&data&&!data.error){obj=data.json||(data.text?extractFront(data.text):null);mockTag=!!data.mock;source="coze";}
     }
     if(!obj||!obj.nodes){obj=FRONT_FALLBACK;demoMode=true;}
-    if(obj.clarify){document.getElementById("resultHint").textContent="智能体需要补充信息："+obj.question;document.getElementById("resultHint").style.display="block";return;}
+    if(obj.clarify){
+      window.pendingClarifyPrompt=text;
+      document.getElementById("clarifyQ").textContent="智能体需要补充信息："+(obj.question||"请补充行业、素材类型、目标平台");
+      document.getElementById("clarifyForm").style.display="block";
+      document.getElementById("resultHint").textContent="需求较模糊，请补充以下信息后重新生成生产线";
+      document.getElementById("resultHint").style.display="block";
+      return;
+    }
     const lf=layoutLine(obj);
     name=obj.lineName||"我的生产线";
     TEMPLATES[name]=lf;currentTplName=name;
     document.getElementById("wfMount").style.display="block";
     renderWorkflow(name);
     registerWF(obj,lf,name);
+    autoSaveTemplate(name,lf); // 自动生成后立即存入「我的模板」，实现可复用资产闭环
     saveState();
     const tag=source==="coze"?(mockTag?"（示例数据）已通过 Coze 生成工作流：":"已通过 Coze 智能体实时生成工作流："):"（演示数据 · 线上未接入代理；部署 Cloudflare Worker 后此处即为真实 Coze 调用）已生成工作流：";
-    document.getElementById("resultHint").textContent=tag+name;
+    document.getElementById("resultHint").textContent=tag+name+" · 已自动保存为可复用模板";
     document.getElementById("resultHint").style.display="block";
   }catch(err){
     clearInterval(tick);
@@ -1145,13 +1184,17 @@ document.getElementById("exportBtn").onclick=()=>{
   if(pubNodes.length&&chs.length) alert("已发布到："+chs.join(" + ")+" ✓\n（审核通过的成片已进入发布节点，可在「交付管理/运行记录」查看）");
   else alert("当前生产线无发布节点，或尚未授权渠道。可在「账户与集成」中连接渠道。");
 };
-document.getElementById("saveTplBtn").onclick=()=>{
-  if(!currentWF){alert("请先生成工作流，再存为模板");return;}
-  const nm=currentWF.lineName||"我的生产线";
-  TEMPLATES[nm]=JSON.parse(JSON.stringify(currentWF)); // 保存真实画布数据（含 reworkLoop/品牌）
+function autoSaveTemplate(name,wf){
+  const nm=name||(wf&&wf.lineName)||"我的生产线";
+  if(!wf)return;
+  TEMPLATES[nm]=JSON.parse(JSON.stringify(wf)); // 保存真实画布数据（含 reworkLoop/品牌）
   if(!TPLS.some(t=>t.key===nm)) TPLS.unshift({nm:nm,desc:"由自然语言生成并保存的自定义生产线，含运行 / 审片 / 品牌配置，可一键复用。",tg:["我的","自定义"],key:nm});
   renderTpl();saveState();
-  alert("已存为模板：「"+nm+"」✓ 可在「模板中心」一键复用（含完整画布与配置）");
+}
+document.getElementById("saveTplBtn").onclick=()=>{
+  if(!currentWF){alert("请先生成工作流，再存为模板");return;}
+  autoSaveTemplate(currentWF.lineName,currentWF);
+  alert("已存为模板：「"+(currentWF.lineName||"我的生产线")+"」✓ 可在「模板中心」一键复用（含完整画布与配置）");
 };
 document.getElementById("mediaFilters").querySelectorAll(".fchip").forEach(f=>f.onclick=()=>{
   document.querySelectorAll("#mediaFilters .fchip").forEach(x=>x.classList.remove("active"));
@@ -1221,6 +1264,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         ctx.logs.push("["+nowStr()+"] ✂️ "+n.title+" → 调用 AI 智能抠图（去背景）…");
         setRunStatus("✂️ "+n.title+" · 真实抠图中…","busy");
         const mResp=await fetchMatting(selectedAssetUrls.filter(Boolean));
+        addCost(ctx,mResp);
         const mUrl=mResp&&mResp.url?mResp.url:null;
         if(mUrl){ctx.imgUrl=mUrl;let tag=mResp.source==="wanx_matting"?"🖼️ 智能抠图（去背景·真）":"⚠️ 抠图失败·回退("+(mResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
         else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 抠图暂不可用，已用占位图");}
@@ -1230,6 +1274,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         setRunStatus("🎨 "+n.title+" · 真实调色中…","busy");
         const colorStyle=(n.params&&n.params.style)||(window.lastUserPrompt||"")||"cinematic";
         const cResp=await fetchColor(selectedAssetUrls.filter(Boolean), colorStyle);
+        addCost(ctx,cResp);
         const cUrl=cResp&&cResp.url?cResp.url:null;
         if(cUrl){ctx.imgUrl=cUrl;let tag=cResp.source==="wanx_color"?"🎨 AI调色（万相·真）":"⚠️ 调色失败·回退("+(cResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
         else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 调色暂不可用，已用占位图");}
@@ -1238,6 +1283,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
         const imgPrompt=buildImagePrompt(n,wf,order,i,ctx.feedback);
         const imgResp=await fetchRealImage(imgPrompt, selectedAssetUrls.filter(Boolean));
+        addCost(ctx,imgResp);
         const imgUrl=imgResp&&imgResp.url?imgResp.url:null;
         if(imgUrl){
           ctx.imgUrl=imgUrl;
@@ -1251,7 +1297,6 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
       }
       if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
-      ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
       continue;
     }
     await sleep(650);
@@ -1260,11 +1305,11 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
           ctx.logs.push("["+nowStr()+"] 🏷️ "+n.title+" → 调用视觉模型分类…");
           setRunStatus("🏷️ "+n.title+" · 真实分类中…","busy");
           const cResp=await fetchClassify(selectedAssetUrls.filter(Boolean));
+          addCost(ctx,cResp);
           if(cResp&&cResp.ok){ctx.classify={category:cResp.category,tags:cResp.tags,confidence:cResp.confidence};
             ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → 分类："+cResp.category+(Array.isArray(cResp.tags)&&cResp.tags.length?(" / "+cResp.tags.join("、")):""));}
           else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 分类暂不可用");}
           if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
-          ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
           continue;
         }
         if(/文案|配文|文案生成/i.test(role2)){
@@ -1272,11 +1317,11 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
           setRunStatus("✍️ "+n.title+" · 真实文案生成中…","busy");
           const copyCtx=(wf.lineName||"")+(n.params&&n.params.platform?(" 平台："+n.params.platform):"")+(n.params&&n.params.tone?(" 风格："+n.params.tone):"");
           const cpResp=await fetchCopy(copyCtx||(n.title||"内容"));
+          addCost(ctx,cpResp);
           if(cpResp&&cpResp.ok&&cpResp.text){ctx.copyText=cpResp.text;
             ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → 文案已生成（"+(cpResp.source||"")+"）");}
           else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 文案生成暂不可用");}
           if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
-          ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
           continue;
         }
         if(/视频粗剪|配乐|字幕|生成预览相册|相册/i.test(role2)){
@@ -1286,7 +1331,6 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
       ctx.logs.push("["+nowStr()+"] "+n.title+" → OK");
       if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
     }
-    ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
   }
   return true;
 }
@@ -1362,6 +1406,11 @@ async function fetchCopy(promptText){
   }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
 }
 function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
+function addCost(ctx,resp){
+  if(resp&&typeof resp.cost==="number")ctx.cost+=resp.cost;
+  else ctx.cost+=Math.round((Math.random()*0.12+0.03)*100)/100;
+  ctx.cost=Math.round(ctx.cost*100)/100;
+}
 /* 为图像生成节点构造高质量 prompt：
    - 通用结构：英文视觉指令 + 中文上下文 + 通用负面清单（对所有指令生效）
    - 动态行业词：按用户需求关键词自动追加对应负面词（食品/人像/空间类），互不干扰 */
@@ -1450,6 +1499,7 @@ async function startRun(){
   if(!currentWF){alert("请先在「生产线」页生成工作流，再点运行");return;}
   if(runState.running){alert("已有流程在运行或等待审片，请先处理");return;}
   runState.running=true;
+  runState.startTime=Date.now();
   document.getElementById("runBtn").style.display="none";
   document.getElementById("stopBtn").style.display="";
   document.querySelectorAll(".node-rect").forEach(x=>x.classList.remove("node-done","node-rework","node-exec"));
@@ -1497,10 +1547,12 @@ function finishRun(wf,ctx){
   }
   const revCount=ctx.reviews?ctx.reviews.length:0;
   logs.push("["+nowStr()+"] ✔ 运行结束"+(revCount?("（"+revCount+" 次审片 · "):"（")+"消耗 ¥"+ctx.cost.toFixed(2)+"）");
-  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:revCount?60:100,s:revCount?"待客户审片":"已交付",st:revCount?"p-amber":"p-teal",imgUrl:ctx.imgUrl||null});
+  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:revCount?60:100,s:revCount?"待客户审片":"已交付",st:revCount?"p-amber":"p-teal",imgUrl:ctx.imgUrl||null,copyText:ctx.copyText||"",classify:ctx.classify||null,createdAt:nowStr()});
   runState.seq++;
-  const durMin=1+Math.floor(Math.random()*4),durSec=Math.floor(Math.random()*60);
-  RUNS.unshift({id:"RUN-"+Math.floor(2042+Math.random()*800),nm:wf.lineName,st:"成功",cls:"p-teal",time:nowStr().slice(0,16),dur:durMin+"m"+String(durSec).padStart(2,"0")+"s",cost:"¥"+ctx.cost.toFixed(2),nodes:wf.nodes.length,logs});
+  const elapsedMs=Math.max(1000,(runState.startTime?Date.now()-runState.startTime:0));
+  const durMin=Math.floor(elapsedMs/60000),durSec=Math.floor((elapsedMs%60000)/1000);
+  const hasRework=(ctx.rounds||1)>1;
+  RUNS.unshift({id:"RUN-"+Math.floor(2042+Math.random()*800),nm:wf.lineName,st:"成功",cls:"p-teal",time:nowStr().slice(0,16),dur:durMin+"m"+String(durSec).padStart(2,"0")+"s",cost:"¥"+ctx.cost.toFixed(2),nodes:wf.nodes.length,hasRework:hasRework,logs});
   refreshStats();renderDeliv();renderRuns();saveState();
   setRunStatus("✔ 运行成功 · 产出已交付（审片台 / 交付管理 / 运行记录可查）","");
 }
@@ -1570,11 +1622,12 @@ function refreshStats(){
   const active=RUNS.filter(r=>r.st==="运行中"||r.st==="待审片").length;
   const total=Math.max(1,RUNS.length);
   const ok=RUNS.filter(r=>r.st==="成功").length;
+  const rework=RUNS.filter(r=>r.hasRework).length;
   const cost=RUNS.reduce((s,r)=>s+parseFloat(String(r.cost||"0").replace("¥","")||0),0);
   qs[0].textContent=active;
-  qs[1].textContent=(total*12).toLocaleString();
-  qs[2].textContent=(ok/total*100).toFixed(1)+"%";
-  qs[3].textContent=8;
+  qs[1].textContent=ok;              // 累计成功运行
+  qs[2].textContent=((total-rework)/total*100).toFixed(1)+"%"; // 一次通过率
+  qs[3].textContent="¥"+cost.toFixed(2); // 累计消耗
 }
 /* init 后刷新统计 */
 setTimeout(refreshStats,200);
