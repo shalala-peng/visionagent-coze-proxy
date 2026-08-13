@@ -302,6 +302,15 @@
           </div>
         </div>
       </div>
+      <div class="card" style="margin-top:16px">
+        <h3>已知边界 · 已验证</h3>
+        <p class="hint" style="margin:0 0 10px">本产品能力边界如实标注（详见仓库 README §7）：</p>
+        <div class="row"><span>✓ 模糊意图澄清已上线</span><span class="pill p-teal">已验收</span></div>
+        <div class="row"><span>✓ 节点级成本真实计量（cost 字段真返回）</span><span class="pill p-teal">已验收</span></div>
+        <div class="row"><span>⚠ 编排 LLM 需自备 Key（余额不足时清晰需求走示例线）</span><span class="pill p-amber">部署须知</span></div>
+        <div class="row"><span>⚠ 抠图 / 调色当前万相优先、失败兜底出图</span><span class="pill p-amber">边界</span></div>
+        <div class="row"><span>⚠ 多平台发布 / 视频真出片为二期</span><span class="pill p-coral">规划中</span></div>
+      </div>
     </section>
 
     <!-- LINES (builder) -->
@@ -1132,9 +1141,9 @@ async function generate(){
       const imgList=selectedAssetUrls.filter(Boolean);
       const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:text,images:imgList.length?imgList:undefined,llmProvider:currentModel})});
       let data={};try{data=await res.json();}catch(_){}
-      if(res.ok&&data&&!data.error){obj=data.json||(data.text?extractFront(data.text):null);mockTag=!!data.mock;source="coze";}
+      if(res.ok&&data&&!data.error){obj=data.clarify?data:(data.json||(data.text?extractFront(data.text):null));mockTag=!!data.mock;source=data.source||"coze";}
     }
-    if(!obj||!obj.nodes){obj=FRONT_FALLBACK;demoMode=true;}
+    if(!obj||(!obj.clarify&&!obj.nodes)){obj=FRONT_FALLBACK;demoMode=true;}
     if(obj.clarify){
       window.pendingClarifyPrompt=text;
       document.getElementById("clarifyQ").textContent="智能体需要补充信息："+(obj.question||"请补充行业、素材类型、目标平台");
