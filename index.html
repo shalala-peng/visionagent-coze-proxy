@@ -204,6 +204,14 @@
     .side-foot{display:none}
     .wb,.wf-wrap,.review-wrap,.acct-grid,.two{grid-template-columns:1fr}
   }
+/* 双模式（极简 / 专家） */
+.mode-toggle{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-left:12px}
+.mt-btn{padding:6px 14px;font-size:13px;border:none;background:var(--card);color:var(--muted);cursor:pointer}
+.mt-btn.active{background:var(--primary);color:#fff}
+.simple-panel{background:linear-gradient(135deg,#eef3fd,#f7faff);border:1px solid #d7e3fb;border-radius:12px;padding:18px;margin-bottom:16px}
+.simple-panel h3{margin:0 0 6px;font-size:16px;color:var(--ink)}
+.simple-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.simple-row select,.simple-row input{flex:1;min-width:180px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card)}
 </style>
 </head>
 <body>
@@ -239,11 +247,30 @@
         <option value="viewer">角色：只读</option>
       </select>
       <div class="tag-demo">支持多模型切换（扣子 / DeepSeek / 通义 / 智谱 / Kimi / GPT）· 下方「底层模型」可切换 · 网络受限自动降级</div>
+      <div class="mode-toggle" id="modeToggle">
+        <button class="mt-btn active" data-mode="expert" onclick="setMode('expert')">专家模式</button>
+        <button class="mt-btn" data-mode="simple" onclick="setMode('simple')">极简模式</button>
+      </div>
     </div>
 
     <!-- HOME -->
     <section class="view active" id="view-home">
       <div class="hint">面向所有批量产出视觉内容的团队（电商、摄影工作室、餐饮、地产、广告等）的「图像生产流水线」工作台。以摄影为首选深耕行业，平台能力可横向复制到任意视觉内容场景：用自然语言把「素材 → 处理 / 生成 → 审核 → 分发」搭成可复用的智能体生产线。</div>
+      <div class="simple-panel" id="simplePanel" style="display:none">
+        <h3>一句话，出一套能发的视觉素材</h3>
+        <p class="hint" style="margin:0">选行业 → 说需求 → 上传素材（可选）→ 一键生成并运行。编排在后台自动完成，你只需看结果。</p>
+        <div class="simple-row">
+          <select id="simpleIndustry">
+            <option value="电商商品图">电商商品图（上新标准 SOP）</option>
+            <option value="美食探店图">美食探店图</option>
+            <option value="婚纱写真交付">婚纱写真交付</option>
+          </select>
+          <input id="simplePrompt" placeholder="一句话需求，例如：夏季连衣裙上新，要白底主图+场景图，发淘宝和小红书" />
+          <button class="btn ghost" onclick="document.getElementById('assetFile').click()">＋ 上传素材</button>
+          <button class="btn" onclick="simpleGo()">⚡ 一键生成并运行</button>
+        </div>
+        <div id="simpleTip" class="hint" style="display:none;margin-top:10px;color:var(--primary-d)">已按灯塔模板生成生产线并在运行，切到「专家模式」可查看 / 编辑完整画布。</div>
+      </div>
       <div class="stats">
         <div class="stat"><div class="n">12</div><div class="l">运行中生产线</div></div>
         <div class="stat"><div class="n">3,480</div><div class="l">本月处理素材</div></div>
@@ -616,7 +643,18 @@ const TEMPLATES = {
       {id:"d",x:400,y:480,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
       {id:"e",x:230,y:600,type:"Agent",skill:"多平台发布",title:"分发各渠道",desc:"信息流+朋友圈"},
       {id:"f",x:570,y:600,type:"Agent",skill:"文案生成",title:"重做文案",desc:"打回重写"}
-    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e",label:"通过"},{from:"d",to:"f",label:"打回"}]}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e",label:"通过"},{from:"d",to:"f",label:"打回"}]},
+  "电商商品图灯塔":{nodes:[
+      {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"上传商品原图",desc:"由运营/摄影师发起"},
+      {id:"a",x:400,y:150,type:"Agent",skill:"图片分类",title:"识别品类",desc:"套用对应平台规范"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"智能抠图",title:"去背景换白底",desc:"产出白底图"},
+      {id:"c",x:400,y:370,type:"Agent",skill:"AI 调色",title:"主图精修",desc:"干净白底主图"},
+      {id:"d",x:400,y:480,type:"Agent",skill:"场景生成",title:"细节图特写",desc:"材质/卖点特写"},
+      {id:"e",x:400,y:590,type:"Agent",skill:"场景生成",title:"场景图",desc:"使用氛围图"},
+      {id:"f",x:400,y:700,type:"判断",skill:"合规审核",title:"平台规范预检",desc:"违规则打回"},
+      {id:"g",x:230,y:810,type:"Agent",skill:"多平台发布",title:"多尺寸适配",desc:"淘宝/抖音/小红书规格"},
+      {id:"h",x:570,y:810,type:"Agent",skill:"AI 调色",title:"按反馈重修",desc:"打回重做"}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e"},{from:"e",to:"f"},{from:"f",to:"g",label:"通过"},{from:"f",to:"h",label:"打回"}]}
 };
 
 const MEDIA = [
@@ -632,6 +670,7 @@ const MEDIA = [
 
 let TPLS = [
   {nm:"商品图生产线",desc:"原图分类→抠图→调色→AIGC补场景→合规审核→多平台发布。电商上新批量出图。",tg:["电商","上新"],key:"商品图生产线"},
+  {nm:"电商商品图（灯塔模板）",desc:"白底图→主图→细节图→场景图→平台规范预检→多尺寸适配。电商上新的标准 SOP，可一键复用。",tg:["电商","上新","灯塔"],key:"电商商品图灯塔"},
   {nm:"美食探店图",desc:"菜品抠底→统一暖色调→补餐厅氛围→生成探店九宫格发小红书。餐饮连锁标准化。",tg:["餐饮","探店"],key:"美食探店图"},
   {nm:"婚纱写真交付",desc:"精修调色→背景增强→生成预览相册→客户审片，不满意自动打回重修。",tg:["婚纱","客片"],key:"婚纱写真交付"},
   {nm:"地产民宿图标准化",desc:"空间图统一调色校正→按平台规格出图→多平台发布。",tg:["地产","民宿"],key:"商品图生产线"},
@@ -690,6 +729,36 @@ function goView(v){
 }
 document.querySelectorAll(".nav-item").forEach(n=>n.onclick=()=>goView(n.dataset.view));
 function goLines(pre){ if(pre) document.getElementById("prompt").value=pre; goView("lines"); }
+
+/* 双模式：极简（真实用户）/ 专家（画布） */
+function setMode(m){
+  document.querySelectorAll(".mt-btn").forEach(b=>b.classList.toggle("active",b.dataset.mode===m));
+  const home=document.getElementById("view-home");
+  const panel=document.getElementById("simplePanel");
+  const stats=home?home.querySelector(".stats"):null;
+  const two=home?home.querySelector(".two"):null;
+  if(m==="simple"){
+    if(panel)panel.style.display="";
+    if(stats)stats.style.display="none";
+    if(two)two.style.display="none";
+    goView("home");
+  }else{
+    if(panel)panel.style.display="none";
+    if(stats)stats.style.display="";
+    if(two)two.style.display="";
+  }
+}
+const SIMPLE_MAP={"电商商品图":"电商商品图灯塔","美食探店图":"美食探店图","婚纱写真交付":"婚纱写真交付"};
+function simpleGo(){
+  const ind=document.getElementById("simpleIndustry").value;
+  const key=SIMPLE_MAP[ind]||"电商商品图灯塔";
+  const note=(document.getElementById("simplePrompt").value||"").trim();
+  useTpl(key);
+  setTimeout(function(){
+    try{ startRun(); if(note) setRunStatus("极简模式运行中 · "+note.slice(0,40),""); }catch(e){ console.warn(e); }
+  },350);
+  const tip=document.getElementById("simpleTip"); if(tip) tip.style.display="";
+}
 
 /* ============ 技能工坊 子tab ============ */
 document.querySelectorAll(".subtab").forEach(t=>t.onclick=()=>{
@@ -1386,6 +1455,8 @@ async function startRun(){
   document.querySelectorAll(".node-rect").forEach(x=>x.classList.remove("node-done","node-rework","node-exec"));
   const wf=currentWF,order=topoOrder(wf);
   const ctx={order,idx:-1,wf,reviews:[],cost:0,rounds:1,logs:["["+nowStr()+"] ▶ 开始运行："+wf.lineName]};
+  const _fbHint=fbMemHint(wf.lineName);
+  if(_fbHint)ctx.logs.push("["+nowStr()+"] "+_fbHint);
   setRunStatus("⚙️ 运行中 · 按拓扑顺序执行节点…","busy");
   const ok=await runSegment(order,0,order.length-1,wf,ctx);
   if(ok)finishRun(wf,ctx);
@@ -1462,12 +1533,37 @@ function reviewReject(id){
   r.s="已打回重做";
   r.rounds=(r.rounds||1)+1;
   const pend=runState.pending;
+  saveFbMem(pend?normKey(pend.wf.lineName):normKey(r.t), fb);
   if(pend&&pend.reviewId===id){
     pend.reviewId=null;pend.backTo=r.backTo;pend.feedback=fb;
     renderReview();
     setTimeout(rerunSegment,500);
   }else{renderReview();renderDeliv();syncDelivFromReview();setRunStatus("↩ 已打回重做","warn");}
 }
+
+/* 审片反馈记忆：每次打回的原因沉淀到本地，下次同生产线运行自动提示（越用越懂你） */
+const FB_KEY="va_fb_memory_v1";
+function loadFbMem(){ try{return JSON.parse(localStorage.getItem(FB_KEY)||"{}");}catch(e){return {};} }
+function normKey(s){ return String(s||"").split(" · ")[0].trim(); }
+function saveFbMem(key,reason){
+  if(!key||!reason)return;
+  const m=loadFbMem();
+  const rec=m[key]||{count:0,reasons:[]};
+  rec.count++;
+  rec.reasons.unshift(reason);
+  if(rec.reasons.length>5)rec.reasons=rec.reasons.slice(0,5);
+  rec.last=new Date().toISOString().slice(0,10);
+  m[key]=rec;
+  try{localStorage.setItem(FB_KEY,JSON.stringify(m));}catch(e){}
+}
+function fbMemHint(lineName){
+  const m=loadFbMem();
+  const rec=m[normKey(lineName)];
+  if(!rec||!rec.count)return "";
+  const top=rec.reasons.slice(0,3);
+  return "🧠 该生产线历史上被打回 "+rec.count+" 次，常见原因："+top.join("；")+"。本次已自动带入修正提示。";
+}
+
 function refreshStats(){
   const qs=document.querySelectorAll("#view-home .stat .n");
   if(qs.length!==4)return;
