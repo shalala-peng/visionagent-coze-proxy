@@ -1154,6 +1154,15 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         const mUrl=mResp&&mResp.url?mResp.url:null;
         if(mUrl){ctx.imgUrl=mUrl;let tag=mResp.source==="wanx_matting"?"🖼️ 智能抠图（去背景·真）":"⚠️ 抠图失败·回退("+(mResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
         else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 抠图暂不可用，已用占位图");}
+      }else if(/AI调色|调色/i.test(role)){
+        // 真实 AI 调色：色调/风格化重渲染（mode:"color"，复用万相 description_edit）
+        ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 调色（色调/风格化重渲染）…");
+        setRunStatus("🎨 "+n.title+" · 真实调色中…","busy");
+        const colorStyle=(n.params&&n.params.style)||(window.lastUserPrompt||"")||"cinematic";
+        const cResp=await fetchColor(selectedAssetUrls.filter(Boolean), colorStyle);
+        const cUrl=cResp&&cResp.url?cResp.url:null;
+        if(cUrl){ctx.imgUrl=cUrl;let tag=cResp.source==="wanx_color"?"🎨 AI调色（万相·真）":"⚠️ 调色失败·回退("+(cResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
+        else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 调色暂不可用，已用占位图");}
       }else{
         ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
         setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
@@ -1176,8 +1185,31 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
       continue;
     }
     await sleep(650);
-    const role2=(n.skill||n.title||"").trim();
-    if(/视频粗剪|配乐|字幕|生成预览相册|相册/i.test(role2)){
+        const role2=(n.skill||n.title||"").trim();
+        if(/图片分类|分类/i.test(role2)){
+          ctx.logs.push("["+nowStr()+"] 🏷️ "+n.title+" → 调用视觉模型分类…");
+          setRunStatus("🏷️ "+n.title+" · 真实分类中…","busy");
+          const cResp=await fetchClassify(selectedAssetUrls.filter(Boolean));
+          if(cResp&&cResp.ok){ctx.classify={category:cResp.category,tags:cResp.tags,confidence:cResp.confidence};
+            ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → 分类："+cResp.category+(Array.isArray(cResp.tags)&&cResp.tags.length?(" / "+cResp.tags.join("、")):""));}
+          else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 分类暂不可用");}
+          if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+          ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
+          continue;
+        }
+        if(/文案|配文|文案生成/i.test(role2)){
+          ctx.logs.push("["+nowStr()+"] ✍️ "+n.title+" → 调用 LLM 生成文案…");
+          setRunStatus("✍️ "+n.title+" · 真实文案生成中…","busy");
+          const copyCtx=(wf.lineName||"")+(n.params&&n.params.platform?(" 平台："+n.params.platform):"")+(n.params&&n.params.tone?(" 风格："+n.params.tone):"");
+          const cpResp=await fetchCopy(copyCtx||(n.title||"内容"));
+          if(cpResp&&cpResp.ok&&cpResp.text){ctx.copyText=cpResp.text;
+            ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → 文案已生成（"+(cpResp.source||"")+"）");}
+          else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 文案生成暂不可用");}
+          if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+          ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
+          continue;
+        }
+        if(/视频粗剪|配乐|字幕|生成预览相册|相册/i.test(role2)){
       ctx.logs.push("["+nowStr()+"] ⚠️ "+n.title+" → 规划中（模拟，一期未接真实引擎）");
       if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
     }else{
@@ -1226,6 +1258,35 @@ async function fetchMatting(images){
 async function fetchModeration(text){
   try{
     const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"moderation",prompt:text})});
+    const d=await res.json();
+    return d||{};
+  }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
+}
+/* 真实图片分类：fetch 云函数 mode:"classify"，视觉模型看图打标签 */
+async function fetchClassify(images){
+  try{
+    const body={mode:"classify"};
+    if(Array.isArray(images)&&images.length)body.images=images.filter(Boolean);
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await res.json();
+    return d||{};
+  }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
+}
+/* 真实 AI 调色：fetch 云函数 mode:"color"，复用万相 description_edit 重渲染 */
+async function fetchColor(images,style){
+  try{
+    const body={mode:"color",prompt:style||"cinematic"};
+    if(Array.isArray(images)&&images.length)body.images=images.filter(Boolean);
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await res.json();
+    return d||{};
+  }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
+}
+/* 真实文案生成：fetch 云函数 mode:"copy"，复用底层 LLM 路由文生 */
+async function fetchCopy(promptText){
+  try{
+    const body={mode:"copy",prompt:promptText||"",llmProvider:currentModel};
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const d=await res.json();
     return d||{};
   }catch(e){return {ok:false,note:String(e&&e.message?e.message:e)};}
