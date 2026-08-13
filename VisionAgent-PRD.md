@@ -269,7 +269,7 @@ GET  /api/me/usage            # 账户用量/套餐
 - **原型已打通真实调用（v0.4.3 新增）**：`visionagent-prototype.html` 的「生成工作流」按钮已从 mock 升级为**真实调用**该扣子智能体。架构为新增的 `server.js`（零依赖 Node 后端代理）：浏览器 `fetch('/api/generate')` → 后端代持 `COZE_API_KEY` 调 Coze `v3/chat`，规避了浏览器直连的跨域 + API Key 暴露问题；采用 **SSE 流式**方式累积模型答案（Coze 的 retrieve / message 轮询接口对 Personal Access Token 存在已知鉴权坑，故用流式绕开）。真实返回即合法 JSON，经前端 `layoutLine()` 自动分层布局后渲染成可编辑画布。
 - **真实调用示例（婚纱客片，可复现）**：输入「原图→智能修图→AIGC 补氛围场景→客户审片→不满意打回重修→满意后合规审核→交付」，返回 `{ lineName:"婚纱客片生产线", industry:"摄影", nodes:6（1 触发器+3 Agent+2 判断）, edges:7, reworkLoop:{condition:"合规不通过或客户不满意", backTo:"3"} }`，连线带「不满意 / 满意 / 通过 / 打回重做」标签——即 PRD 所述「多审核门 + 分支打回」复杂闭环，**真实生成、非预设**。
 - **线上 Demo 真调 Coze 的代理演进（v0.4.4 → v0.4.6）**：CloudStudio 仅静态托管、跑不了 `server.js`，所以公开 Demo 需要一个「代持 Key 调 Coze」的外部代理。v0.4.4 先用 **Cloudflare Worker**（`coze-worker.js`，边缘函数，加密持有 `COZE_API_KEY`），Key 不落浏览器、安全级别等同真实后端、贴合「AI Agent + Serverless 边缘」热点；但实测其 `*.workers.dev` 域名在中国大陆访问不稳定（用户浏览器 fetch 失败、降级为演示数据）。v0.4.5 改用 **Railway** 部署同一份 `server.js`（`visionagent-coze-proxy` 项目，`*.up.railway.app` 域名），大陆访问性显著更好、且**无 10 秒超时限制**；但沙箱实测通过、用户浏览器仍 `Failed to fetch`，说明海外免费托管域名对国内家庭宽带整体不可靠。v0.4.6 最终落地方案：**代理迁到腾讯云 SCF 云函数**（`index.js`，Node 18，函数 URL `*.tencentscf.com` 国内可达、CORS `*`、SSE 真调 Coze，实测婚纱/电商两需求均 `mock:false` 且结构不同），**前端静态页托管到 GitHub Pages**（`https://shalala-peng.github.io/visionagent-coze-proxy/`，大陆可访问）。整条链路：GitHub Pages 前端 `fetch` 云函数 → 云函数代持 `COZE_API_KEY` 调 Coze SSE → 返回 JSON 渲染画布。Key 全程不出服务端，三层解耦，是标准的 serverless 前后端分离架构。
-- **公开 Demo 链接（真调已接入，最终版）**：https://shalala-peng.github.io/visionagent-coze-proxy/（GitHub Pages 托管前端 + 腾讯云 SCF 代理，大陆浏览器可真调；进入「生产线」页输入自然语言点「生成工作流」即触发真实 Coze 调用；网络异常自动降级演示数据，保证可看可交互。备用：扣子智能体直链 https://www.coze.cn/store/agent/7672806993245192246?bot_id=true）
+- **公开 Demo 链接（真调已接入，最终版）**：https://shalala-peng.github.io/visionagent-coze-proxy/（GitHub Pages 托管前端 + 腾讯云 SCF 代理，大陆浏览器可真调；进入「生产线」页输入自然语言点「生成工作流」即触发真实拆线调用（默认通义 qwen-vl-max，可切换 Coze / DeepSeek / 智谱 / Kimi / GPT 等）；网络异常自动降级演示数据，保证可看可交互。备用：扣子智能体直链 https://www.coze.cn/store/agent/7672806993245192246?bot_id=true）
 
 ### 11.6 闭环交互（v0.4.7 新增，前端运行引擎）
 > 把「搭建 → 运行 → 审核 → 发布 → 复盘」主链路做成**可交互闭环**：生成的工作流不只是画布，而是一条**能真的跑起来**的流水线。纯前端实现，与后端无关，面试可现场演示完整产品闭环。
@@ -296,7 +296,7 @@ GET  /api/me/usage            # 账户用量/套餐
 
 | 环节 | 模型 | 估算成本 |
 |---|---|---|
-| 拆线（NL → 生产线） | 扣子 / LLM | ≈ ¥0.01–0.05 |
+| 拆线（NL → 生产线） | 多 LLM 路由（默认通义 qwen-vl-max） | ≈ ¥0.01–0.05 |
 | 图片分类 | 通义千问 VL | ≈ ¥0.002 |
 | 智能抠图 | 通义万相 | ≈ ¥0.04–0.08（免费额度内 ≈ ¥0） |
 | 场景出图 | 智谱 CogView / 万相 | ≈ ¥0.08–0.12 |

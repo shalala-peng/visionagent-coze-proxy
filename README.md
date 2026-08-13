@@ -113,7 +113,7 @@ LLM 返回 JSON 常缺字段 / 格式漂移。加了宽容自动修正 + 带错�
 
 | 环节 | 模型 | 估算成本 |
 |---|---|---|
-| 拆线（NL → 生产线） | 扣子 / LLM | ≈ ¥0.01–0.05 |
+| 拆线（NL → 生产线） | 多 LLM 路由（默认通义 qwen-vl-max） | ≈ ¥0.01–0.05 |
 | 图片分类 | 通义千问 VL | ≈ ¥0.002 |
 | 智能抠图 | 通义万相 | ≈ ¥0.04–0.08（免费额度内 ≈ ¥0） |
 | 场景出图 | 智谱 CogView / 万相 | ≈ ¥0.08–0.12 |
@@ -137,7 +137,8 @@ LLM 返回 JSON 常缺字段 / 格式漂移。加了宽容自动修正 + 带错�
 - **成本真实计量**：7 个 mode 的 `cost` 字段均由 SCF 真实返回（moderation 0 / copy 0.001 / classify 0.002 / image 0.1 / matting·color 兜底 0.1 / 编排 0.01），非 mock。
 
 **当前运行边界（部署者须知）**：
-- 若 SCF 环境变量 `LLM_PROVIDER` 指向的供应商余额不足（实测曾遇 402），清晰需求会退化为示例生产线；解决：将 `LLM_PROVIDER` 改为 `coze`（需配 `COZE_API_KEY`）或给该供应商充值。
+- **拆线默认大模型已设为通义 `qwen-vl-max`**：前端默认、且 SCF 环境变量 `LLM_PROVIDER=qwen` 已配置（live 验收返回 `source: llm_qwen`）；后端 `index.js` 的回退默认值仍为 `coze`，仅在未设 `LLM_PROVIDER` 时生效，部署时推荐显式设为 `qwen`、并把 `LLM_API_KEY` 填成你的 DashScope key（与 `DASHSCOPE_API_KEY` 同值，二者是不同变量）。理由：DashScope key 已验证有余额（分类 / 文案节点真跑通）、走更简单的 OpenAI 兼容路径、且通义在编排层已能看图（见下）；Coze 作备选（豆包深度思考拆线质量更高，但为独立 bot 系统、多一层依赖）。若 `LLM_PROVIDER` 指向的供应商余额不足（实测曾遇 402），清晰需求会退化为示例生产线，需充值或改 provider。
+- **通义在编排层已支持看图（方案 A）**：`PROVIDERS.qwen` 模型已改为 `qwen-vl-max` 并加入 `VISION_CAPABLE`，故 `LLM_PROVIDER=qwen` 且上传素材图时，拆线会真实把图传给通义理解（此前 qwen 被当纯文本模型、不传图）；`openai` / `glm` 同样默认看图，`deepseek` / `kimi` 为纯文本。
 - `matting` / `color` 当前为万相优先、失败兜底 CogView：兜底出图**不保证去背景 / 不保证按风格调色**，建议先用真实素材（先 upload 到 COS 再传 COS 公网 URL）复测万相。
 - 多平台一键发布、视频 / 相册真出片为二期（见 §4 决策一、Roadmap）。
 
@@ -150,7 +151,7 @@ LLM 返回 JSON 常缺字段 / 格式漂移。加了宽容自动修正 + 带错�
    │  用户自然语言需求 + 选模型
    ▼
 腾讯云 SCF 云函数（编排代理层，Node 18 零依赖，代持所有 API Key）
-   ├─ 生产线编排：扣子 / 多 LLM 路由（NL → 有向图）
+   ├─ 生产线编排：多 LLM 路由（默认通义 qwen-vl-max，NL → 有向图）
    ├─ 视觉执行节点：通义万相（抠图 / 调色）· 智谱 CogView（出图）· 通义千问 VL（分类）· 规则引擎（审核）· 文本模型（文案）
    ├─ 素材：上传 COS → 公网 URL 喂视觉模型
    └─ 异常 / 无额度时自动降级，保证可交互
@@ -174,11 +175,11 @@ LLM 返回 JSON 常缺字段 / 格式漂移。加了宽容自动修正 + 带错�
 ## 9. 部署说明（详细看指南）
 
 - **想看效果**：直接用上面 Demo 链接，无需任何部署。
-- **自己部署后端**：腾讯云 SCF + 配环境变量（Coze / LLM / 万相 / 智谱 / COS / 阿里云），详见 [`domestic-deploy/DOMESTIC-DEPLOY-GUIDE.md`](domestic-deploy/DOMESTIC-DEPLOY-GUIDE.md)。
+- **自己部署后端**：腾讯云 SCF + 配环境变量（LLM（含 Coze 可选）/ 万相 / 智谱 / COS / 阿里云），详见 [`domestic-deploy/DOMESTIC-DEPLOY-GUIDE.md`](domestic-deploy/DOMESTIC-DEPLOY-GUIDE.md)。
 - **自己部署前端**：把 [`deploy/index.html`](deploy/index.html) 传到静态托管即可。
 - ⚠️ GitHub Pages 发布源须指向 `deploy/index.html`（根目录旧 `index.html` 已过期，勿部署）。
 
-**技术栈**：前端原生 HTML/CSS/JS（零构建）· 腾讯云 SCF（Node 18）· Coze API · 通义万相 · 智谱 CogView · 阿里云内容安全（预留）· 腾讯云 COS · GitHub Pages
+**技术栈**：前端原生 HTML/CSS/JS（零构建）· 腾讯云 SCF（Node 18）· 多 LLM 路由（默认通义 qwen-vl-max，Coze 可选）· 通义万相 · 智谱 CogView · 阿里云内容安全（预留）· 腾讯云 COS · GitHub Pages
 
 ---
 

@@ -246,7 +246,7 @@
         <option value="member">角色：成员</option>
         <option value="viewer">角色：只读</option>
       </select>
-      <div class="tag-demo">支持多模型切换（扣子 / DeepSeek / 通义 / 智谱 / Kimi / GPT）· 下方「拆线模型」可切换 · 网络受限自动降级</div>
+      <div class="tag-demo">支持多模型切换（通义 / DeepSeek / 扣子 / 智谱 / Kimi / GPT）· 默认「通义千问」· 网络受限自动降级</div>
       <div class="mode-toggle" id="modeToggle">
         <button class="mt-btn active" data-mode="expert" onclick="setMode('expert')">专家模式</button>
         <button class="mt-btn" data-mode="simple" onclick="setMode('simple')">极简模式</button>
@@ -315,7 +315,7 @@
 
     <!-- LINES (builder) -->
     <section class="view" id="view-lines">
-      <div class="hint">生产线画布：左侧用自然语言描述你的视觉内容生产需求，系统调用 Coze 智能体实时拆任务、生成可编辑的 Workflow（需后端代理已启动）；点击任意节点查看 / 修改其 Skill 与参数。</div>
+      <div class="hint">生产线画布：左侧用自然语言描述你的视觉内容生产需求，系统调用「拆线模型」实时拆任务、生成可编辑的 Workflow（需后端代理已启动）；点击任意节点查看 / 修改其 Skill 与参数。</div>
       <div class="wb">
         <div class="card">
           <h3>描述你想搭建的视觉内容智能体</h3>
@@ -331,9 +331,9 @@
           <div class="model-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
             <label style="font-size:13px;color:var(--muted)" title="仅控制「自然语言 → 生产线」的拆线编排；抠图/出图/分类/文案/审核等执行节点会自动路由到对应视觉模型">拆线模型 ⓘ</label>
             <select id="modelSelect" onchange="onModelChange()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--card)">
-              <option value="coze">扣子视觉智能体（最强看图）</option>
+              <option value="qwen">通义千问 Qwen（默认 · 可看图）</option>
               <option value="deepseek">DeepSeek（低成本编排）</option>
-              <option value="qwen">通义千问 Qwen</option>
+              <option value="coze">扣子视觉智能体（最强看图 · 备选）</option>
               <option value="glm">智谱 GLM-4V（可看图）</option>
               <option value="kimi">Kimi</option>
               <option value="openai">OpenAI GPT-4o</option>
@@ -343,7 +343,6 @@
           <textarea id="prompt" placeholder="例如：帮我搭一条商品图生产线，原图进来先分类，再智能抠图，按抖音规范调色，用 AIGC 补场景，合规不过就打回重做，最后发到各平台"></textarea>
           <div class="chips" id="chips"></div>
           <button class="btn" id="genBtn">生成工作流</button>
-          <a class="btn ghost" href="https://www.coze.cn/store/agent/7672806993245192246?bot_id=true" target="_blank" rel="noopener">在扣子体验真实智能体 ↗</a>
           <div class="steps" id="steps">
             <div class="step" data-k="intent"><span class="dot"></span>① 理解意图 / 识别路由</div>
             <div class="step" data-k="skill"><span class="dot"></span>② 匹配视觉 Skill</div>
@@ -934,7 +933,7 @@ function useTpl(key){
   const t=TEMPLATES[key];
   goView("lines");
   if(!t){const p=document.getElementById("prompt");p.value="使用模板："+key;return;}
-  // 直接恢复已保存的画布数据（无需重新调 Coze）
+  // 直接恢复已保存的画布数据（无需重新调拆线模型）
   currentTplName=key;
   document.getElementById("wfMount").style.display="block";
   renderWorkflow(key);
@@ -1077,7 +1076,7 @@ function selectNode(id){
     <div class="io"><b>输入：</b>${so.in}<br><b>输出：</b>${so.out}</div>
     <p class="hint" style="margin-top:12px">参数修改仅在前端演示，真实生效需后端接入 Skill 执行引擎。</p>`;
 }
-/* 把扣子返回的 JSON（trigger/action/condition 节点 + edges）自动分层布局成画布坐标 */
+/* 把拆线模型返回的 JSON（trigger/action/condition 节点 + edges）自动分层布局成画布坐标 */
 function layoutLine(obj){
   const nodes=obj.nodes||[], edges=obj.edges||[];
   // 打回/重做类边是回退边，不参与正向分层（否则会形成环把节点推到错误列）
@@ -1122,11 +1121,11 @@ function extractFront(text){
   const s=t.indexOf("{");const e=t.lastIndexOf("}");
   if(s>=0&&e>=0)t=t.slice(s,e+1);return JSON.parse(t);
 }
-const COZE_PROXY_URL="https://1466923365-czw28jkc4f.ap-guangzhou.tencentscf.com"; /* 腾讯云 SCF 函数 URL（国内云函数代理，代持 COZE_API_KEY 真调 Coze），大陆浏览器可真调，告别 Failed to fetch。改完需重新部署 CloudStudio 生效。 */
+const COZE_PROXY_URL="https://1466923365-czw28jkc4f.ap-guangzhou.tencentscf.com"; /* 腾讯云 SCF 函数 URL（国内云函数代理，代持 API Key 真调多模型），大陆浏览器可真调，告别 Failed to fetch。改完需重新部署 CloudStudio 生效。 */
 /* 前端模型选择：用户可切换拆线/编排大模型，选择经 body.llmProvider 传给云函数（覆盖环境变量默认）。仅控制 NL→生产线编排，执行节点自动路由到对应视觉模型。 */
-let currentModel="coze";
+let currentModel="qwen";
 function onModelChange(){const v=document.getElementById("modelSelect").value;currentModel=v;try{localStorage.setItem("va_model",v);}catch(_){}updateModelNote();}
-function updateModelNote(){const notes={coze:"Coze 视觉 bot 拆线编排 · 执行节点仍路由到万相/CogView/千问VL",deepseek:"DeepSeek 纯文本拆线 · 看图由 qwen-vl、出图由 CogView 等执行节点完成",qwen:"通义千问纯文本拆线 · 执行节点由 qwen-vl / 万相 / CogView 完成",glm:"智谱 GLM-4V 拆线编排 · 自带视觉，执行节点仍独立路由",kimi:"Kimi 纯文本拆线 · 执行节点由专用视觉/生成模型完成",openai:"GPT-4o 拆线编排 · 执行节点仍独立路由到对应模型"};const el=document.getElementById("modelNote");if(el){el.textContent=notes[currentModel]||"";el.title="拆线模型只决定「一句话→生产线」的编排；后续抠图/出图/分类/文案/审核会由对应视觉模型执行。";}}
+function updateModelNote(){const notes={qwen:"通义千问 Qwen 拆线编排（默认）· 可看图，执行节点仍独立路由",coze:"Coze 视觉 bot 拆线编排（备选）· 执行节点仍路由到万相/CogView/千问VL",deepseek:"DeepSeek 纯文本拆线 · 看图由 qwen-vl、出图由 CogView 等执行节点完成",glm:"智谱 GLM-4V 拆线编排 · 自带视觉，执行节点仍独立路由",kimi:"Kimi 纯文本拆线 · 执行节点由专用视觉/生成模型完成",openai:"GPT-4o 拆线编排 · 执行节点仍独立路由到对应模型"};const el=document.getElementById("modelNote");if(el){el.textContent=notes[currentModel]||"";el.title="拆线模型只决定「一句话→生产线」的编排；后续抠图/出图/分类/文案/审核会由对应视觉模型执行。";}}
 async function generate(){
   const text=document.getElementById("prompt").value.trim();
   if(!text){alert("请先描述你想搭建的视觉内容智能体 🙂");return;}
@@ -1160,7 +1159,7 @@ async function generate(){
     registerWF(obj,lf,name);
     autoSaveTemplate(name,lf); // 自动生成后立即存入「我的模板」，实现可复用资产闭环
     saveState();
-    const tag=source==="coze"?(mockTag?"（示例数据）已通过 Coze 生成工作流：":"已通过 Coze 智能体实时生成工作流："):"（演示数据 · 线上未接入代理；部署 Cloudflare Worker 后此处即为真实 Coze 调用）已生成工作流：";
+    const tag=mockTag?"（示例数据）已通过拆线模型生成工作流：":"已通过拆线模型实时生成工作流：";
     document.getElementById("resultHint").textContent=tag+name+" · 已自动保存为可复用模板";
     document.getElementById("resultHint").style.display="block";
   }catch(err){
@@ -1173,7 +1172,7 @@ async function generate(){
     renderWorkflow(name);
     registerWF(FRONT_FALLBACK,lf,name);
     const errMsg=(err&&err.message)?err.message:"网络不可达";
-    const diag="代理地址："+COZE_PROXY_URL+"\n错误："+errMsg+"\n\n排查建议：\n1. 若开启了梯子/Clash/VPN，请关闭或把 *.tencentscf.com 加入直连；\n2. 不要直接双击 index.html，请用 start-local.bat 启动 localhost:8080；\n3. 也可直接到扣子体验真实智能体。";
+    const diag="代理地址："+COZE_PROXY_URL+"\n错误："+errMsg+"\n\n排查建议：\n1. 若开启了梯子/Clash/VPN，请关闭或把 *.tencentscf.com 加入直连；\n2. 不要直接双击 index.html，请用 start-local.bat 启动 localhost:8080；\n3. 可切换拆线模型或检查 SCF 环境变量额度/Key。";
     document.getElementById("resultHint").innerHTML="（演示数据 · "+errMsg+"，已降级）已生成工作流："+name+" <a href='#' onclick='alert(`"+diag+"`);return false;' style='color:#ff6b6b;text-decoration:underline'>查看诊断</a>";
     document.getElementById("resultHint").style.display="block";
   }
@@ -1682,7 +1681,7 @@ function loadState(){
 
 /* init */
 loadState();
-try{const m=localStorage.getItem("va_model");if(m)currentModel=m;}catch(_){}
+try{const m=localStorage.getItem("va_model");if(m){ if(m==="coze"){localStorage.removeItem("va_model");}else{currentModel=m;} }}catch(_){}
 const _ms=document.getElementById("modelSelect");if(_ms)_ms.value=currentModel;updateModelNote();
 renderSkillLib();
 renderReview();
