@@ -695,9 +695,27 @@ let TPLS = [
   {nm:"活动跟拍即时出片",desc:"现场粗修→即时生成图文纪要→推送参会者。发布会/会议场景。",tg:["活动","即时"],key:"商品图生产线"}
 ];
 
+function svgAsset(label,bg){
+  const s="<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><rect width='400' height='400' fill='"+bg+"'/><text x='50%' y='52%' font-size='24' font-family='sans-serif' text-anchor='middle' fill='rgba(255,255,255,.92)'>"+label+"</text></svg>";
+  return "data:image/svg+xml;utf8,"+encodeURIComponent(s);
+}
 let DELIV = [
-  {c:"抖音旗舰店 · 夏季上新",t:"商品图",p:100,s:"已交付",st:"p-teal"},
-  {c:"连锁餐饮 B · 探店九宫格",t:"美食探店",p:100,s:"已交付",st:"p-teal"},
+  {c:"抖音旗舰店 · 夏季上新",t:"商品图",p:100,s:"已交付",st:"p-teal",
+   imgUrl:svgAsset("白底图","#f6d365"),
+   assets:[
+     {type:"白底图",label:"去背景换白底",url:svgAsset("白底图","#f6d365")},
+     {type:"主图",label:"主图精修",url:svgAsset("主图","#fda085")},
+     {type:"细节图",label:"细节图特写",url:svgAsset("细节图","#a1c4fd")},
+     {type:"场景图",label:"场景图",url:svgAsset("场景图","#84fab0")},
+     {type:"文案",label:"小红书文案",text:"夏季连衣裙上新｜清爽显瘦，通勤度假都能穿 🌿 点击看细节→"}
+   ]},
+  {c:"连锁餐饮 B · 探店九宫格",t:"美食探店",p:100,s:"已交付",st:"p-teal",
+   imgUrl:svgAsset("场景图","#84fab0"),
+   assets:[
+     {type:"场景图",label:"餐厅氛围图",url:svgAsset("场景图","#84fab0")},
+     {type:"主图",label:"招牌菜特写",url:svgAsset("主图","#fbc2eb")},
+     {type:"文案",label:"小红书文案",text:"周末探店｜这家店的氛围感绝了，出片率 100% 📸"}
+   ]},
   {c:"客户 A · 婚纱套系",t:"写真交付",p:60,s:"待客户审片",st:"p-amber"},
   {c:"品牌 C · 民宿空间图",t:"地产标准化",p:80,s:"运行中",st:"p-blue"},
   {c:"营销活动 · 广告物料",t:"物料批产",p:45,s:"已打回重做",st:"p-coral"}
@@ -1274,7 +1292,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         const mResp=await fetchMatting(selectedAssetUrls.filter(Boolean));
         addCost(ctx,mResp);
         const mUrl=mResp&&mResp.url?mResp.url:null;
-        if(mUrl){ctx.imgUrl=mUrl;let tag=mResp.source==="wanx_matting"?"🖼️ 智能抠图（去背景·真）":"⚠️ 抠图失败·回退("+(mResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
+        if(mUrl){ctx.imgUrl=mUrl;ctx.assets.push({type:"白底图",label:n.title,url:mUrl,source:mResp.source});let tag=mResp.source==="wanx_matting"?"🖼️ 智能抠图（去背景·真）":"⚠️ 抠图失败·回退("+(mResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
         else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 抠图暂不可用，已用占位图");}
       }else if(/AI调色|调色/i.test(role)){
         // 真实 AI 调色：色调/风格化重渲染（mode:"color"，复用万相 description_edit）
@@ -1284,7 +1302,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         const cResp=await fetchColor(selectedAssetUrls.filter(Boolean), colorStyle);
         addCost(ctx,cResp);
         const cUrl=cResp&&cResp.url?cResp.url:null;
-        if(cUrl){ctx.imgUrl=cUrl;let tag=cResp.source==="wanx_color"?"🎨 AI调色（万相·真）":"⚠️ 调色失败·回退("+(cResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
+        if(cUrl){ctx.imgUrl=cUrl;ctx.assets.push({type:"主图",label:n.title,url:cUrl,source:cResp.source});let tag=cResp.source==="wanx_color"?"🎨 AI调色（万相·真）":"⚠️ 调色失败·回退("+(cResp.note||"")+")";ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → "+tag);}
         else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 调色暂不可用，已用占位图");}
       }else{
         ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
@@ -1294,7 +1312,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
         addCost(ctx,imgResp);
         const imgUrl=imgResp&&imgResp.url?imgResp.url:null;
         if(imgUrl){
-          ctx.imgUrl=imgUrl;
+          ctx.imgUrl=imgUrl;ctx.assets.push({type:assetTypeOf(n),label:n.title,url:imgUrl,source:imgResp.source||""});
           let tag="AI 出图";
           if(imgResp.source==="wanx_ref")tag="🖼️ 万相参考图（认到素材）";
           else if(imgResp.source==="cogview_fallback")tag="⚠️ 万相失败·回退CogView("+(imgResp.note||"未知")+")";
@@ -1314,7 +1332,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
           setRunStatus("🏷️ "+n.title+" · 真实分类中…","busy");
           const cResp=await fetchClassify(selectedAssetUrls.filter(Boolean));
           addCost(ctx,cResp);
-          if(cResp&&cResp.ok){ctx.classify={category:cResp.category,tags:cResp.tags,confidence:cResp.confidence};
+          if(cResp&&cResp.ok){ctx.classify={category:cResp.category,tags:cResp.tags,confidence:cResp.confidence};ctx.assets.push({type:"分类标签",label:n.title,meta:ctx.classify});
             ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → 分类："+cResp.category+(Array.isArray(cResp.tags)&&cResp.tags.length?(" / "+cResp.tags.join("、")):""));}
           else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 分类暂不可用");}
           if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
@@ -1326,7 +1344,7 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
           const copyCtx=(wf.lineName||"")+(n.params&&n.params.platform?(" 平台："+n.params.platform):"")+(n.params&&n.params.tone?(" 风格："+n.params.tone):"");
           const cpResp=await fetchCopy(copyCtx||(n.title||"内容"));
           addCost(ctx,cpResp);
-          if(cpResp&&cpResp.ok&&cpResp.text){ctx.copyText=cpResp.text;
+          if(cpResp&&cpResp.ok&&cpResp.text){ctx.copyText=cpResp.text;ctx.assets.push({type:"文案",label:n.title,text:cpResp.text,source:cpResp.source});
             ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → 文案已生成（"+(cpResp.source||"")+"）");}
           else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 文案生成暂不可用");}
           if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
@@ -1341,6 +1359,16 @@ async function runSegment(order,fromIdx,toIdx,wf,ctx){
     }
   }
   return true;
+}
+function assetTypeOf(n){
+  const r=(n.skill||n.title||"").trim();
+  if(/智能抠图|抠图|去背景|白底/i.test(r))return "白底图";
+  if(/主图|精修/i.test(r))return "主图";
+  if(/细节图|特写|细节/i.test(r))return "细节图";
+  if(/场景图|场景|氛围|使用氛围/i.test(r))return "场景图";
+  if(/分类/i.test(r))return "分类标签";
+  if(/文案|配文/i.test(r))return "文案";
+  return "生成图";
 }
 function pushReviewTask(wf,condNode,ctx,autoCheck){
   runState.seq++;
@@ -1512,7 +1540,7 @@ async function startRun(){
   document.getElementById("stopBtn").style.display="";
   document.querySelectorAll(".node-rect").forEach(x=>x.classList.remove("node-done","node-rework","node-exec"));
   const wf=currentWF,order=topoOrder(wf);
-  const ctx={order,idx:-1,wf,reviews:[],cost:0,rounds:1,logs:["["+nowStr()+"] ▶ 开始运行："+wf.lineName]};
+  const ctx={order,idx:-1,wf,reviews:[],cost:0,rounds:1,logs:["["+nowStr()+"] ▶ 开始运行："+wf.lineName],assets:[]};
   const _fbHint=fbMemHint(wf.lineName);
   if(_fbHint)ctx.logs.push("["+nowStr()+"] "+_fbHint);
   setRunStatus("⚙️ 运行中 · 按拓扑顺序执行节点…","busy");
