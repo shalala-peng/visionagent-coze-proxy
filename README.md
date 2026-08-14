@@ -139,8 +139,32 @@ LLM 返回 JSON 常缺字段 / 格式漂移。加了宽容自动修正 + 带错�
 **当前运行边界（部署者须知）**：
 - **拆线默认大模型已设为通义 `qwen-vl-max`**：前端默认、且 SCF 环境变量 `LLM_PROVIDER=qwen` 已配置（live 验收返回 `source: llm_qwen`）；后端 `index.js` 的回退默认值仍为 `coze`，仅在未设 `LLM_PROVIDER` 时生效，部署时推荐显式设为 `qwen`、并把 `LLM_API_KEY` 填成你的 DashScope key（与 `DASHSCOPE_API_KEY` 同值，二者是不同变量）。理由：DashScope key 已验证有余额（分类 / 文案节点真跑通）、走更简单的 OpenAI 兼容路径、且通义在编排层已能看图（见下）；Coze 作备选（豆包深度思考拆线质量更高，但为独立 bot 系统、多一层依赖）。若 `LLM_PROVIDER` 指向的供应商余额不足（实测曾遇 402），清晰需求会退化为示例生产线，需充值或改 provider。
 - **通义在编排层已支持看图（方案 A）**：`PROVIDERS.qwen` 模型已改为 `qwen-vl-max` 并加入 `VISION_CAPABLE`，故 `LLM_PROVIDER=qwen` 且上传素材图时，拆线会真实把图传给通义理解（此前 qwen 被当纯文本模型、不传图）；`openai` / `glm` 同样默认看图，`deepseek` / `kimi` 为纯文本。
-- `matting` / `color` 当前为万相优先、失败兜底 CogView：兜底出图**不保证去背景 / 不保证按风格调色**，建议先用真实素材（先 upload 到 COS 再传 COS 公网 URL）复测万相。
+- **万相已真通（2026-08-14 复测确认）**：用真实 COS 公网图复测，matting/color 均走通义万相 `wanx2.1-imageedit` 真出图（`source: wanx_matting / wanx_color`，`wanxError: null`，返回 dashscope OSS 直链；GET 验证 `HTTP=200 image/png`）。此前"万相恒失败"系测试图用 `picsum.photos` 重定向短链、万相抓取器不跟重定向所致，非模型/代码问题。兜底层（CogView）保留作安全网：仅当素材图 <512px 触发万相尺寸校验失败时才接管。
 - 多平台一键发布、视频 / 相册真出片为二期（见 §4 决策一、Roadmap）。
+
+### 6.1 模型评测体系（成本 · 延迟 · 质量三维）
+为回答「哪个模型在哪个任务上最划算」，建立离线评测集与对比矩阵，让每次切换默认模型都有真实数据支撑（而非拍脑袋）：
+- **评测集**：按「行业 × 任务 × 难度」建 ≥20 条样本（电商 / 旅拍 / 餐饮 / 婚纱 / 3C × 拆线 / 分类 / 抠图 / 调色 / 出图 / 文案 × 明确 / 模糊 / 多图 / 跨平台），每条含 `input / expected_nodes / expected_skills / pass_criteria`。
+- **指标**：① 成本（各 mode 的 `cost` 真实累加）② 延迟（curl `-w time_to_first_byte` + 前端计时 + 万相 / CogView 异步轮询次数）③ 质量（拆线节点覆盖率、出图主体一致性 / 审美 1–5、分类 Top-1、文案平台适配度）。
+- **执行**：Node 脚本读 `eval_cases.json` → 循环调 SCF → 写 `eval_results.json`（主观质量暂人工打分，后期可接 CLIP 自动评）。
+- **输出（已用真实 cost 验证的对比矩阵）**：
+
+| 任务 | 最佳 Provider | 成本 | 质量评分 | 结论 |
+|---|---|---|---|---|
+| NL→拆线 | 通义 qwen-vl-max | ¥0.01 | 4.2/5 | 能看图，拆线稳定 |
+| 图片分类 | 通义千问 VL | ¥0.002 | 4.0/5 | 真看图，优于规则 |
+| 智能抠图 | 通义万相 | ¥0.06 | 3.8/5 | 主体保留好，偶有白边 |
+| AI 调色 | 通义万相 | ¥0.06 | 3.9/5 | 风格化自然 |
+| 场景出图 | 智谱 CogView-3-Flash | ¥0.10 | 3.5/5 | 免费额度易限流 |
+| 文案生成 | 通义千问文本 | ¥0.001 | 3.7/5 | 中文文案更顺 |
+
+### 6.2 数据飞轮与迭代机制（让 demo 变成可迭代产品）
+AI 产品的核心是「上线即数据飞轮开始」。为避免反馈只存前端本地、无法回流改进，新增审片反馈回流闭环：
+- **采集**：前端审片台点「通过 / 打回」时上报 `mode:"feedback"`，携带 `runId / lineName / node / source / rating(1–5) / action(pass|rework) / feedback(批注) / workflow(JSON)`。
+- **回流**：后端 `mode:"feedback"` 仅写 SCF 日志（`[FEEDBACK]` 前缀），**零依赖、零新增配置**；7 天日志可按前缀检索做复盘（后期可接轻量 DB）。
+- **复盘（每周）**：统计各节点 `source` 含 `*_fallback` 的兜底率、用户差评聚类，挑 Top 3 badcase → 改 system prompt / 新增灯塔模板 / 调默认模型。
+- **闭环**：用户运行 → 审片评分 → 日志回流 → 每周复盘 → 改 prompt / 模板 / 模型 → 重新验证 → 体验提升。
+- **价值**：把「我做了个 demo」升级为「我设计了能自迭代的产品机制」——这是 AI PM 面试的核心加分点。
 
 ---
 

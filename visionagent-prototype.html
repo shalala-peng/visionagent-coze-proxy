@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VisionAgent · 视觉内容智能体生产线（原型）</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --border:#e4e7ec; --ink:#1f2937; --muted:#6b7280;
+    --primary:#2F6FED; --primary-d:#163E8C; --teal:#0F6E56; --amber:#BA7517; --coral:#C2410C;
+    --soft-blue:#E8F0FE; --soft-teal:#E1F5EE; --soft-amber:#FAEEDA; --soft-coral:#FDEBE3;
+    --side:#0F2238; --side-2:#162d49;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  .app{display:flex;min-height:100vh}
+  /* sidebar */
+  .sidebar{width:212px;background:var(--side);color:#cdd7e6;display:flex;flex-direction:column;flex:none}
+  .brand{padding:18px 20px 16px;border-bottom:1px solid #1d3350}
+  .brand .b1{font-size:17px;font-weight:700;color:#fff;letter-spacing:.5px}
+  .brand .b2{font-size:11px;color:#7e93b0;margin-top:3px}
+  .nav{padding:10px 10px;flex:1}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;color:#aebfd6;cursor:pointer;font-size:13.5px;margin-bottom:3px}
+  .nav-item:hover{background:var(--side-2);color:#fff}
+  .nav-item.active{background:var(--primary);color:#fff}
+  .nav-item .ico{font-size:15px;width:20px;text-align:center}
+  .side-foot{padding:14px 20px;border-top:1px solid #1d3350;font-size:11px;color:#6c819e}
+  /* main */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{display:flex;align-items:center;gap:14px;padding:13px 24px;background:#fff;border-bottom:1px solid var(--border)}
+  .crumb{font-size:13px;color:var(--muted)}
+  .crumb b{color:var(--ink)}
+  .tag-demo{font-size:12px;color:var(--amber);background:var(--soft-amber);padding:4px 11px;border-radius:20px}
+  .role-sel{margin-left:auto;font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--ink)}
+  .view{display:none;padding:24px;overflow:auto}
+  .view.active{display:block}
+  .hint{font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.7}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}
+  .card h3{font-size:14px;margin-bottom:12px;color:var(--ink)}
+  /* home */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .stat{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
+  .stat .n{font-size:24px;font-weight:700;color:var(--primary-d)}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:4px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px dashed var(--border);font-size:13px}
+  .row:last-child{border-bottom:none}
+  .pill{font-size:11px;padding:2px 9px;border-radius:10px}
+  .p-blue{background:var(--soft-blue);color:var(--primary-d)}
+  .p-teal{background:var(--soft-teal);color:var(--teal)}
+  .p-amber{background:var(--soft-amber);color:var(--amber)}
+  .p-coral{background:var(--soft-coral);color:var(--coral)}
+  .btn{background:var(--primary);color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer}
+  .btn:hover{background:var(--primary-d)}
+  .btn.ghost{background:#fff;color:var(--primary-d);border:1px solid #bcd2f7}
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .btn.danger{background:var(--coral)}
+  .btn.danger:hover{background:#9a3412}
+  /* workbench / lines */
+  .wb{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+  textarea{width:100%;min-height:96px;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;resize:vertical;font-family:inherit}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .chip{font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:18px;background:#fff;cursor:pointer;color:var(--muted)}
+  .chip:hover{border-color:var(--primary);color:var(--primary-d)}
+  .steps{margin-top:16px}
+  .step{display:flex;align-items:center;gap:10px;padding:8px 0;color:var(--muted);font-size:13px}
+  .step .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex:none}
+  .step.done .dot{background:var(--teal);border-color:var(--teal)}
+  .step.done{color:var(--ink)}
+  .wf-wrap{display:grid;grid-template-columns:1fr 300px;gap:16px}
+  .canvas{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .canvas svg{display:block;width:100%;height:auto}
+  .node-rect{cursor:pointer}
+  .node-rect:hover rect{stroke-width:2}
+  .node-selected rect{stroke:var(--primary);stroke-width:2.5}
+  .node-exec rect{stroke:var(--primary);stroke-width:2.5;filter:drop-shadow(0 0 5px rgba(47,111,237,.55))}
+  .node-done rect{stroke:var(--teal);stroke-width:2}
+  .node-done text{opacity:.75}
+  .node-rework rect{stroke:var(--coral);stroke-width:2.5;filter:drop-shadow(0 0 5px rgba(194,65,12,.5))}
+  .run-status{font-size:12px;color:var(--teal);font-weight:600;margin-left:4px}
+  .run-status.busy{color:var(--primary)}
+  .run-status.warn{color:var(--amber)}
+  .rev-img img,.rev-img{width:100%;height:280px;border-radius:10px;margin-bottom:12px;object-fit:cover}
+  .rev-thumb.has-img{background-size:cover;background-position:center}
+  .prop{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
+  .prop h3{font-size:14px;margin-bottom:4px}
+  .prop .skill{font-size:12px;color:var(--teal);margin-bottom:12px}
+  .prop label{display:block;font-size:12px;color:var(--muted);margin:12px 0 4px}
+  .prop input,.prop select{width:100%;border:1px solid var(--border);border-radius:6px;padding:7px;font-size:13px}
+  .io{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7}
+  .toolbar{display:flex;gap:10px;margin-bottom:14px}
+  /* skill grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+  .skill{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
+  .skill .cat{font-size:11px;color:#fff;background:var(--primary);padding:2px 8px;border-radius:10px;display:inline-block;margin-bottom:8px}
+  .skill h4{font-size:14px;margin-bottom:6px}
+  .skill p{font-size:12px;color:var(--muted);line-height:1.6}
+  .skill .io{margin-top:10px;border-top:1px dashed var(--border);padding-top:8px}
+  /* skill workshop sub tabs */
+  .subtabs{display:inline-flex;background:#eef1f6;border-radius:9px;padding:3px;margin-bottom:16px}
+  .subtab{padding:7px 14px;border-radius:7px;font-size:13px;color:var(--muted);cursor:pointer;border:none;background:transparent}
+  .subtab.active{background:#fff;color:var(--primary-d);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .dev{display:grid;grid-template-columns:300px 1fr 300px;gap:16px;align-items:start}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .field input,.field select,.field textarea{width:100%;border:1px solid var(--border);border-radius:7px;padding:8px;font-size:13px;font-family:inherit}
+  .editor{background:#0f1b2d;color:#d6e2f3;border-radius:10px;overflow:hidden;border:1px solid #1d3350}
+  .editor .bar{background:#16233a;padding:8px 12px;font-size:12px;color:#8aa0bf;display:flex;justify-content:space-between}
+  .editor pre{margin:0;padding:14px;font-family:"SFMono-Regular",Consolas,monospace;font-size:12.5px;line-height:1.6;white-space:pre-wrap}
+  .editor .k{color:#7aa7ff}.editor .s{color:#9ad29a}.editor .c{color:#5e7596}
+  .debug{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px}
+  .debug .io-box{background:#f7f9fc;border:1px solid var(--border);border-radius:7px;padding:10px;font-size:12px;font-family:monospace;color:#374151;min-height:64px;margin-top:6px}
+  /* media */
+  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .fchip{font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:18px;background:#fff;cursor:pointer;color:var(--muted)}
+  .fchip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .media{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+  .asset{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .asset .thumb{height:96px}
+  .asset .meta{padding:10px}
+  .asset .meta .nm{font-size:12.5px;font-weight:500}
+  .asset .meta .sub{font-size:11px;color:var(--muted);margin-top:3px}
+  /* templates */
+  .tpl{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;display:flex;flex-direction:column}
+  .tpl h4{font-size:14.5px;margin-bottom:6px}
+  .tpl p{font-size:12px;color:var(--muted);line-height:1.6;flex:1}
+  .tpl .tg{margin:10px 0}
+  .tpl .tg span{font-size:11px;background:#eef1f6;color:#475569;padding:2px 8px;border-radius:8px;margin-right:6px}
+  /* delivery */
+  .deliv{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .deliv table{width:100%;border-collapse:collapse;font-size:13px}
+  .deliv th{text-align:left;padding:12px 16px;background:#f7f9fc;color:var(--muted);font-weight:600;font-size:12px;border-bottom:1px solid var(--border)}
+  .deliv td{padding:13px 16px;border-bottom:1px solid #f0f2f5}
+  .bar-mini{height:6px;background:#eef1f6;border-radius:4px;overflow:hidden;width:120px;display:inline-block;vertical-align:middle}
+  .bar-mini i{display:block;height:100%;background:var(--primary);border-radius:4px}
+  /* settings */
+  .set-sec{margin-bottom:20px}
+  .set-sec h4{font-size:13.5px;margin-bottom:12px;color:var(--ink)}
+  .set-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px dashed var(--border)}
+  .set-row .lab{font-size:13px}
+  .set-row .desc{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .toggle{width:42px;height:24px;border-radius:14px;background:var(--primary);position:relative;cursor:pointer;flex:none}
+  .toggle i{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+  .toggle.off{background:#cfd6e0}
+  .toggle.off i{left:3px;right:auto}
+  /* modal */
+  .mask{position:fixed;inset:0;background:rgba(15,34,56,.45);display:none;align-items:center;justify-content:center;z-index:50}
+  .mask.show{display:flex}
+  .modal{background:#fff;border-radius:14px;width:420px;padding:22px}
+  .modal h3{font-size:15px;margin-bottom:14px}
+  .chk{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:13px;color:var(--muted)}
+  .chk .ic{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex:none;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .chk.ok{color:var(--ink)}
+  .chk.ok .ic{background:var(--teal);border-color:var(--teal);color:#fff}
+  .modal .foot{margin-top:16px;display:flex;justify-content:flex-end;gap:10px}
+  /* review desk */
+  .review-wrap{display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start}
+  .rev-list{background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px}
+  .rev-item{padding:12px;border-radius:9px;cursor:pointer;display:flex;gap:12px;align-items:center;border:1px solid transparent}
+  .rev-item:hover{background:#f7f9fc}
+  .rev-item.active{background:var(--soft-blue);border-color:#bcd2f7}
+  .rev-thumb{width:56px;height:56px;border-radius:8px;flex:none}
+  .rev-meta{flex:1;min-width:0}
+  .rev-meta .t{font-size:13px;font-weight:500}
+  .rev-meta .s{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .rev-detail{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
+  .rev-img{width:100%;height:280px;border-radius:10px;margin-bottom:12px}
+  .rev-actions{display:flex;gap:10px;margin-top:12px}
+  .annot{width:100%;border:1px solid var(--border);border-radius:7px;padding:8px;font-size:12.5px;font-family:inherit;min-height:54px;margin-top:8px}
+  /* runs */
+  .runs-list{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .run-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f0f2f5;cursor:pointer}
+  .run-row:hover{background:#f7f9fc}
+  .run-row .nm{flex:1;font-size:13px}
+  .run-detail{margin-top:16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;display:none}
+  .log{font-family:monospace;font-size:12px;background:#0f1b2d;color:#d6e2f3;padding:12px;border-radius:8px;white-space:pre-wrap;line-height:1.7;max-height:240px;overflow:auto}
+  /* brand */
+  .brand-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+  .brand-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
+  .swatch-row{display:flex;gap:8px;margin:10px 0}
+  .swatch{width:40px;height:40px;border-radius:8px;border:1px solid var(--border)}
+  .brand-card .kv{font-size:12px;color:var(--muted);line-height:1.8}
+  /* account */
+  .acct-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .usage-bar{height:10px;background:#eef1f6;border-radius:6px;overflow:hidden;margin-top:6px}
+  .usage-bar i{display:block;height:100%;background:var(--primary)}
+  .plan-card{background:linear-gradient(135deg,#163E8C,#2F6FED);color:#fff;border-radius:12px;padding:16px}
+  .plan-card .pp{font-size:20px;font-weight:700}
+  .apikey{font-family:monospace;font-size:12px;background:#f7f9fc;border:1px solid var(--border);border-radius:7px;padding:8px;color:#374151}
+  .channel{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
+  .channel .dotc{width:36px;height:36px;border-radius:9px;background:#eef1f6;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .channel .ci{flex:1}
+  .channel .ci .cn{font-size:13px;font-weight:500}
+  .channel .ci .cs{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .connected{color:var(--teal)}
+  /* role-based visibility */
+  body.role-member .nav-item[data-view="settings"],
+  body.role-member .nav-item[data-view="account"]{display:none}
+  body.role-viewer .nav-item[data-view="settings"],
+  body.role-viewer .nav-item[data-view="account"],
+  body.role-viewer .nav-item[data-view="skills"],
+  body.role-viewer .nav-item[data-view="brand"]{display:none}
+  body.role-viewer .edit-only{display:none!important}
+  /* responsive (mobile review etc.) */
+  @media(max-width:880px){
+    .app{flex-direction:column}
+    .sidebar{width:100%;flex-direction:row;overflow-x:auto}
+    .brand{border-bottom:none;border-right:1px solid #1d3350;flex:none}
+    .nav{flex-direction:row;padding:8px}
+    .nav-item{margin-bottom:0;white-space:nowrap}
+    .side-foot{display:none}
+    .wb,.wf-wrap,.review-wrap,.acct-grid,.two{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="b1">VisionAgent</div>
+      <div class="b2">视觉内容智能体生产线</div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-item active" data-view="home"><span class="ico">🏠</span>工作台</div>
+      <div class="nav-item" data-view="lines"><span class="ico">🔧</span>生产线</div>
+      <div class="nav-item" data-view="skills"><span class="ico">🧩</span>技能工坊</div>
+      <div class="nav-item" data-view="media"><span class="ico">🖼️</span>素材库</div>
+      <div class="nav-item" data-view="templates"><span class="ico">📦</span>模板中心</div>
+      <div class="nav-item" data-view="delivery"><span class="ico">📮</span>交付管理</div>
+      <div class="nav-item" data-view="review"><span class="ico">🔍</span>审片台</div>
+      <div class="nav-item" data-view="runs"><span class="ico">📊</span>运行记录</div>
+      <div class="nav-item" data-view="brand"><span class="ico">🎨</span>品牌中心</div>
+      <div class="nav-item" data-view="account"><span class="ico">👤</span>账户与集成</div>
+      <div class="nav-item" data-view="settings"><span class="ico">⚙️</span>设置</div>
+    </nav>
+    <div class="side-foot">原型 v0.4 · 前端演示<br>数据均为 mock</div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb" id="crumb">VisionAgent / <b>工作台</b></div>
+      <select class="role-sel" id="roleSel" onchange="setRole(this.value)" title="切换角色视图">
+        <option value="admin">角色：管理员</option>
+        <option value="member">角色：成员</option>
+        <option value="viewer">角色：只读</option>
+      </select>
+      <div class="tag-demo">已接入 Coze 真实智能体 · 网络受限时自动降级演示 · 失败请关闭梯子或用 start-local.bat</div>
+    </div>
+
+    <!-- HOME -->
+    <section class="view active" id="view-home">
+      <div class="hint">面向所有批量产出视觉内容的团队（电商、摄影工作室、餐饮、地产、广告等）的「图像生产流水线」工作台。以摄影为首选深耕行业，平台能力可横向复制到任意视觉内容场景：用自然语言把「素材 → 处理 / 生成 → 审核 → 分发」搭成可复用的智能体生产线。</div>
+      <div class="stats">
+        <div class="stat"><div class="n">12</div><div class="l">运行中生产线</div></div>
+        <div class="stat"><div class="n">3,480</div><div class="l">本月处理素材</div></div>
+        <div class="stat"><div class="n">94.2%</div><div class="l">一审通过率</div></div>
+        <div class="stat"><div class="n">8</div><div class="l">平台内置视觉 Skill</div></div>
+      </div>
+      <div class="two">
+        <div class="card">
+          <h3>最近生产线</h3>
+          <div class="row"><span>商品图生产线 · 抖音旗舰店</span><span class="pill p-blue">运行中</span></div>
+          <div class="row"><span>美食探店图 · 连锁餐饮 B</span><span class="pill p-teal">已完成</span></div>
+          <div class="row"><span>婚纱写真交付 · 客户 A</span><span class="pill p-amber">待审片</span></div>
+          <div class="row"><span>地产民宿空间图 · 品牌 C</span><span class="pill p-blue">运行中</span></div>
+          <div class="row"><span>广告物料批产 · 营销活动</span><span class="pill p-coral">已打回重做</span></div>
+        </div>
+        <div class="card">
+          <h3>快速开始</h3>
+          <p class="hint" style="margin-bottom:12px">用一句话描述你想自动化的视觉内容生产流程，系统自动拆任务、匹配视觉 Skill、生成可编辑流水线。</p>
+          <button class="btn edit-only" onclick="goLines()">＋ 新建生产线</button>
+          <button class="btn ghost" style="margin-left:8px" onclick="goView('templates')">浏览模板中心</button>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)">
+            <div class="hint" style="margin:0 0 8px">试试这些需求：</div>
+            <div class="chips">
+              <span class="chip" onclick="goLines('帮我搭一条商品图生产线：原图进来先分类，再智能抠图，按抖音规范调色，用 AIGC 补场景，合规不过就打回重做，最后发到各平台')">商品图生产线</span>
+              <span class="chip" onclick="goLines('把连锁餐厅的新菜品拍图自动抠底、调成统一暖色调、补餐厅氛围背景，生成探店九宫格发小红书')">美食探店图</span>
+              <span class="chip" onclick="goLines('把一次旅拍素材自动粗剪成带配乐字幕的短片，审核通过后推给我看')">旅拍 Vlog 粗剪</span>
+              <span class="chip" onclick="goLines('婚纱客片修图后自动生成预览相册推给客户，不满意就打回重修')">婚纱写真交付</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LINES (builder) -->
+    <section class="view" id="view-lines">
+      <div class="hint">生产线画布：左侧用自然语言描述你的视觉内容生产需求，系统调用 Coze 智能体实时拆任务、生成可编辑的 Workflow（需后端代理已启动）；点击任意节点查看 / 修改其 Skill 与参数。</div>
+      <div class="wb">
+        <div class="card">
+          <h3>描述你想搭建的视觉内容智能体</h3>
+          <textarea id="prompt" placeholder="例如：帮我搭一条商品图生产线，原图进来先分类，再智能抠图，按抖音规范调色，用 AIGC 补场景，合规不过就打回重做，最后发到各平台"></textarea>
+          <div class="chips" id="chips"></div>
+          <button class="btn" id="genBtn">生成工作流</button>
+          <a class="btn ghost" href="https://www.coze.cn/store/agent/7672806993245192246?bot_id=true" target="_blank" rel="noopener">在扣子体验真实智能体 ↗</a>
+          <div class="steps" id="steps">
+            <div class="step" data-k="intent"><span class="dot"></span>① 理解意图 / 识别路由</div>
+            <div class="step" data-k="skill"><span class="dot"></span>② 匹配视觉 Skill</div>
+            <div class="step" data-k="plan"><span class="dot"></span>③ 编排 Agent 流水线</div>
+            <div class="step" data-k="render"><span class="dot"></span>④ 生成可编辑画布</div>
+          </div>
+        </div>
+        <div class="card" id="resultCard">
+          <h3>生成结果</h3>
+          <p class="hint" id="resultHint">在左侧输入需求并点击「生成工作流」，这里会出现生成的流水线画布。</p>
+          <div id="wfMount" style="display:none">
+            <div class="toolbar">
+              <button class="btn ghost edit-only" id="backBtn">← 返回修改</button>
+              <button class="btn edit-only" id="runBtn" style="background:var(--teal)">▶ 运行</button>
+              <button class="btn ghost edit-only" id="stopBtn" style="display:none">⏹ 停止</button>
+              <button class="btn edit-only" id="exportBtn">发布</button>
+              <button class="btn ghost edit-only" id="saveTplBtn">存为模板</button>
+              <span id="runStatus" class="run-status" style="margin-left:auto"></span>
+            </div>
+            <div class="wf-wrap">
+              <div class="canvas" id="canvas"></div>
+              <div class="prop" id="prop">
+                <p class="hint">点击左侧画布中的任意节点，查看 / 编辑其 Skill 与参数。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SKILLS (workshop) -->
+    <section class="view" id="view-skills">
+      <div class="subtabs">
+        <button class="subtab active" data-sub="builtin">内置视觉技能</button>
+        <button class="subtab" data-sub="custom">自定义 Skill 开发</button>
+      </div>
+      <div id="sub-builtin">
+        <div class="hint">Skill 是平台的「能力原子」——每个视觉内容智能体由若干图像处理 / 内容 Skill 组合编排而成。下表为平台内置能力池（mock），覆盖电商、摄影、餐饮、地产、广告等多场景。</div>
+        <div class="grid" id="skillGrid"></div>
+      </div>
+      <div id="sub-custom" style="display:none">
+        <div class="hint">自定义 Skill 开发：用户可编写脚本扩展平台能力，配置入参 / 出参 Schema，经「发布校验」后上架到能力池，被任意生产线引用。</div>
+        <div class="dev">
+          <!-- left: meta -->
+          <div class="card">
+            <h3>Skill 基础信息</h3>
+            <div class="field"><label>Skill 名称</label><input value="商品图智能抠图"></div>
+            <div class="field"><label>能力描述</label><input value="去除背景，输出透明底图"></div>
+            <div class="field"><label>业务标签</label><input value="执行 / 图像处理 / 抠图"></div>
+            <div class="field"><label>入参（Schema）</label><textarea style="min-height:54px">image_base64: string（原图）
+mode: enum（精准/标准）</textarea></div>
+            <div class="field"><label>出参（Schema）</label><textarea style="min-height:54px">transparent_png: string
+width: int
+height: int</textarea></div>
+          </div>
+          <!-- middle: code -->
+          <div class="editor">
+            <div class="bar"><span>skill_remove_bg.py</span><span>Python 3.11</span></div>
+            <pre><span class="k">def</span> run(inputs: <span class="k">dict</span>) -&gt; <span class="k">dict</span>:
+    <span class="c"># 商品图智能抠图 Skill：去背景→透明底图</span>
+    <span class="k">from</span> PIL <span class="k">import</span> Image
+    <span class="k">import</span> io, base64
+
+    img = Image.open(io.BytesIO(
+        base64.b64decode(inputs[<span class="s">"image_base64"</span>])))
+    mask = remove_bg(img, mode=inputs[<span class="s">"mode"</span>])
+    buf = io.BytesIO(); mask.save(buf, format=<span class="s">"PNG"</span>)
+    <span class="k">return</span> {
+        <span class="s">"transparent_png"</span>: base64.b64encode(
+            buf.getvalue()).decode(),
+        <span class="s">"width"</span>: img.width, <span class="s">"height"</span>: img.height
+    }</pre>
+          </div>
+          <!-- right: debug + publish -->
+          <div>
+            <div class="debug">
+              <h3 style="font-size:13px;margin-bottom:8px">实时预览调试</h3>
+              <div class="field" style="margin:0"><label>测试入参</label></div>
+              <div class="io-box" id="dbgIn">{ "image_base64":"iVBOR...", "mode":"精准" }</div>
+              <div class="field" style="margin:12px 0 0"><label>运行输出</label></div>
+              <div class="io-box" id="dbgOut">点击「运行测试」查看输出</div>
+              <button class="btn sm edit-only" style="margin-top:10px" onclick="runDebug()">运行测试</button>
+            </div>
+            <button class="btn edit-only" style="width:100%;margin-top:12px" onclick="openPublish()">发布 Skill</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MEDIA -->
+    <section class="view" id="view-media">
+      <div class="hint">素材库：生产线与各 Skill 的图像 / 视频输入源。支持按类型筛选与规格预览（替代通用「知识库」，更贴合视觉内容业务）。</div>
+      <div class="filters" id="mediaFilters">
+        <span class="fchip active" data-f="all">全部</span>
+        <span class="fchip" data-f="人像">人像</span>
+        <span class="fchip" data-f="商品">商品</span>
+        <span class="fchip" data-f="风光">风光</span>
+        <span class="fchip" data-f="视频">视频</span>
+      </div>
+      <div class="media" id="mediaGrid"></div>
+      <div class="hint" id="assetHint" style="margin-top:10px">点击素材卡片选中，用于「运行」时作为本次生产线的输入素材</div>
+      <div class="hint" style="margin-top:16px">素材导入支持：本地拖拽上传、相机直传、网盘同步（演示入口，接入后素材库成为生产线的真实输入端）。</div>
+    </section>
+
+    <!-- TEMPLATES -->
+    <section class="view" id="view-templates">
+      <div class="hint">模板中心：覆盖电商、摄影、餐饮、地产、广告、自媒体等视觉内容场景的预设生产线，一键复用；也包含你从「生产线」存为模板的自定义生产线。每个模板由平台内置 Skill 编排而成，可在此基础上改。</div>
+      <div class="grid" id="tplGrid"></div>
+    </section>
+
+    <!-- DELIVERY -->
+    <section class="view" id="view-delivery">
+      <div class="hint">交付管理：视觉内容团队追踪每条生产线的成片交付状态（客户审片 / 平台发布 / 内部使用）。状态由生产线节点的执行进度自动同步（如「合规审核」节点打回则标记为待重做）。待审片 / 已打回的项可一键跳转到「审片台」。</div>
+      <div class="deliv">
+        <table>
+          <thead><tr><th>客户 / 项目</th><th>类型</th><th>产出</th><th>进度</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody id="delivBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- REVIEW DESK -->
+    <section class="view" id="view-review">
+      <div class="hint">审片台：生产线「合规审核 / 客户审片」节点的专属处理界面。点击左侧待审项，看大图、写批注、通过或打回——这正是生产线「分支打回」闭环的人工落点。界面在窄屏下自动堆叠，支持外拍时手机审片。</div>
+      <div class="review-wrap">
+        <div class="rev-list" id="revList"></div>
+        <div class="rev-detail" id="revDetail">
+          <p class="hint">从左侧选择一条待审片 / 待重做的成片。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUNS -->
+    <section class="view" id="view-runs">
+      <div class="hint">运行记录：每条生产线历史的执行记录，含状态、耗时、消耗与节点级日志。对应 PRD 中的「评测体系」——跑真实数据、收集 Bad Case、反推优化（通过率 / 打回率 / 成本）。</div>
+      <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+        <div class="stat"><div class="n" id="rpOk">—</div><div class="l">运行成功率</div></div>
+        <div class="stat"><div class="n" id="rpRej">—</div><div class="l">打回重做率</div></div>
+        <div class="stat"><div class="n" id="rpDur">—</div><div class="l">平均耗时</div></div>
+        <div class="stat"><div class="n" id="rpCost">—</div><div class="l">累计消耗</div></div>
+      </div>
+      <div class="runs-list" id="runsList"></div>
+      <div class="run-detail" id="runDetail"></div>
+    </section>
+
+    <!-- BRAND CENTER -->
+    <section class="view" id="view-brand">
+      <div class="hint">品牌中心：统一管理品牌视觉规范（品牌色、字体、Logo、禁用元素），供「AI 调色 / 文案生成」等 Skill 引用，保证跨生产线输出风格一致。让平台从单点流水线升级为「任意视觉团队的品牌化生产平台」。</div>
+      <div class="brand-grid" id="brandGrid"></div>
+    </section>
+
+    <!-- ACCOUNT & INTEGRATIONS -->
+    <section class="view" id="view-account">
+      <div class="hint">账户与集成：个人用量、套餐、API Key 与通知偏好（个人中心），以及发布渠道的 OAuth 授权（让「多平台发布」节点真正落地的必备配置）。</div>
+      <div class="acct-grid">
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <h3>我的用量（本月）</h3>
+            <div class="field"><label>Skill 调用次数</label><div class="usage-bar"><i style="width:68%"></i></div><div style="font-size:11px;color:var(--muted);margin-top:4px">6,800 / 10,000</div></div>
+            <div class="field"><label>图像生成（张）</label><div class="usage-bar"><i style="width:42%"></i></div><div style="font-size:11px;color:var(--muted);margin-top:4px">4,200 / 10,000</div></div>
+            <div class="field"><label>运行生产线（次）</label><div class="usage-bar"><i style="width:23%"></i></div><div style="font-size:11px;color:var(--muted);margin-top:4px">230 / 1,000</div></div>
+          </div>
+          <div class="card">
+            <h3>API Key 与通知</h3>
+            <div class="field"><label>个人 API Key</label><div class="apikey">va_live_8f3c2a9b7e1d4c6f90ab...</div></div>
+            <div class="set-row"><div><div class="lab">邮件通知（审片 / 打回）</div></div><span class="toggle"><i></i></span></div>
+            <div class="set-row"><div><div class="lab">Webhook 推送运行结果</div></div><span class="toggle off"><i></i></span></div>
+          </div>
+        </div>
+        <div>
+          <div class="plan-card" style="margin-bottom:16px">
+            <div class="pp">专业版 Pro</div>
+            <div style="font-size:12px;opacity:.85;margin-top:4px">¥199 / 月 · 10,000 次 Skill 调用 · 团队 5 人</div>
+            <button class="btn ghost" style="margin-top:12px;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.4)">升级套餐</button>
+          </div>
+          <div class="card">
+            <h3>渠道集成（OAuth 授权）</h3>
+            <div id="channelList"></div>
+            <p class="hint" style="margin:10px 0 0">授权后，「多平台发布」节点即可推送到对应渠道；未授权渠道在生产线中标记「未连接」。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <div class="hint">平台设置：出图规格、默认模型、合规审核规则与团队成员管理（视觉内容业务原生配置，支持按行业预设）。</div>
+      <div class="card" style="max-width:680px">
+        <div class="set-sec">
+          <h4>出图与发布</h4>
+          <div class="set-row"><div><div class="lab">默认出图规格</div><div class="desc">抖音 1080×1920 / 淘宝 800×800 / 小红书 1242×1660</div></div><span class="pill p-blue">已配置</span></div>
+          <div class="set-row"><div><div class="lab">多平台自动适配</div><div class="desc">发布时按各平台规格自动裁切</div></div><span class="toggle"><i></i></span></div>
+        </div>
+        <div class="set-sec">
+          <h4>模型与能力</h4>
+          <div class="set-row"><div><div class="lab">默认图像模型</div><div class="desc">用于抠图 / 调色 / 场景生成</div></div><span class="pill p-teal">VisionAgent-VL v2</span></div>
+          <div class="set-row"><div><div class="lab">允许自定义 Skill 开发</div><div class="desc">开放脚本扩展能力池</div></div><span class="toggle"><i></i></span></div>
+        </div>
+        <div class="set-sec">
+          <h4>合规审核</h4>
+          <div class="set-row"><div><div class="lab">上线前强制合规审核节点</div><div class="desc">不通过则打回上一节点重做</div></div><span class="toggle"><i></i></span></div>
+          <div class="set-row"><div><div class="lab">敏感内容（肖像权）校验</div><div class="desc">涉及人物需客户授权</div></div><span class="toggle off"><i></i></span></div>
+        </div>
+        <div class="set-sec">
+          <h4>团队成员</h4>
+          <div class="set-row"><div><div class="lab">角色：管理员 / 成员 / 只读</div><div class="desc">顶部角色切换器可实时预览不同角色看到的界面</div></div><span class="pill p-blue">3 人</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- PUBLISH MODAL -->
+<div class="mask" id="mask">
+  <div class="modal">
+    <h3>发布校验</h3>
+    <div class="chk" id="c1"><span class="ic"></span>Skill 名称校验</div>
+    <div class="chk" id="c2"><span class="ic"></span>入参 / 出参配置完整</div>
+    <div class="chk" id="c3"><span class="ic"></span>脚本语法检查</div>
+    <div class="chk" id="c4"><span class="ic"></span>测试用例运行（1/1）</div>
+    <div class="chk" id="c5"><span class="ic"></span>安全合规扫描</div>
+    <div class="foot"><button class="btn ghost" onclick="closePublish()">取消</button><button class="btn" onclick="finishPublish()">确认发布</button></div>
+  </div>
+</div>
+
+<script>
+/* ============ mock 数据 ============ */
+const SKILLS = [
+  {name:"图片分类",cat:"感知",desc:"识别人像 / 风光 / 商品 / 美食等图像类型。",in:"图像文件",out:"分类标签"},
+  {name:"智能抠图",cat:"执行",desc:"去除背景，提取干净主体。",in:"图像",out:"透明底图"},
+  {name:"AI 调色",cat:"执行",desc:"按风格或平台规范调色、裁切尺寸。",in:"图像、规格要求",out:"成片"},
+  {name:"场景生成",cat:"执行",desc:"AIGC 为背景补建场景 / 氛围。",in:"主体图、场景描述",out:"合成图"},
+  {name:"视频粗剪",cat:"执行",desc:"按高光镜头自动剪辑、生成分镜。",in:"视频素材",out:"粗剪片"},
+  {name:"文案生成",cat:"认知",desc:"生成标题、脚本、种草文案。",in:"主题、平台",out:"文案"},
+  {name:"合规审核",cat:"编排",desc:"检测违规内容，不通过则打回重做。",in:"待审内容、规则",out:"通过 / 驳回"},
+  {name:"多平台发布",cat:"执行",desc:"按各平台规格适配并发布。",in:"内容、平台列表",out:"发布回执"}
+];
+
+const TEMPLATES = {
+  "商品图生产线":{nodes:[
+      {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"上传商品原图",desc:"由摄影师发起"},
+      {id:"a",x:400,y:150,type:"Agent",skill:"图片分类",title:"识别图像类型",desc:"商品/场景分流"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"智能抠图",title:"去除背景",desc:"提取主体"},
+      {id:"c",x:400,y:370,type:"Agent",skill:"AI 调色",title:"按平台调色裁切",desc:"抖音/淘宝规格"},
+      {id:"d",x:400,y:480,type:"Agent",skill:"场景生成",title:"AIGC 补场景",desc:"生成卖点图"},
+      {id:"e",x:400,y:590,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
+      {id:"f",x:230,y:700,type:"Agent",skill:"多平台发布",title:"分发各渠道",desc:"抖音+淘宝"},
+      {id:"g",x:570,y:700,type:"Agent",skill:"AI 调色",title:"重做调色",desc:"打回重做"}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e"},{from:"e",to:"f",label:"通过"},{from:"e",to:"g",label:"打回"}]},
+  "旅拍Vlog粗剪":{nodes:[
+      {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"导入旅拍素材",desc:"由摄影师发起"},
+      {id:"a",x:400,y:150,type:"Agent",skill:"视频粗剪",title:"高光分镜剪辑",desc:"自动挑镜头"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"文案生成",title:"生成配乐字幕",desc:"自动对齐"},
+      {id:"c",x:400,y:370,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
+      {id:"d",x:400,y:480,type:"Agent",skill:"多平台发布",title:"推送给我审核",desc:"待确认"}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d",label:"通过"}]},
+  "婚纱写真交付":{nodes:[
+      {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"客片入库",desc:"由摄影师发起"},
+      {id:"a",x:400,y:150,type:"Agent",skill:"AI 调色",title:"精修调色",desc:"风格预设"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"场景生成",title:"背景氛围增强",desc:"可选"},
+      {id:"c",x:400,y:370,type:"Agent",skill:"多平台发布",title:"生成预览相册",desc:"推客户"},
+      {id:"d",x:400,y:480,type:"判断",skill:"合规审核",title:"客户满意?",desc:"不满意打回"},
+      {id:"e",x:400,y:600,type:"Agent",skill:"AI 调色",title:"按反馈重修",desc:"打回重做"}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e",label:"打回"}]},
+  "自媒体矩阵线":{nodes:[
+      {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"成片入库",desc:"由摄影师发起"},
+      {id:"a",x:400,y:150,type:"Agent",skill:"视频粗剪",title:"剪横竖两版",desc:"多比例输出"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"文案生成",title:"生成小红书标题",desc:"种草文案"},
+      {id:"c",x:400,y:370,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
+      {id:"d",x:230,y:480,type:"Agent",skill:"多平台发布",title:"多发几个平台",desc:"通过即发"},
+      {id:"e",x:570,y:480,type:"Agent",skill:"文案生成",title:"重做文案",desc:"打回重写"},
+      {id:"f",x:400,y:600,type:"Agent",skill:"数据复盘",title:"复盘反推选题",desc:"回收数据"}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d",label:"通过"},{from:"c",to:"e",label:"打回"},{from:"d",to:"f"}]},
+  "美食探店图":{nodes:[
+      {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"上传菜品原图",desc:"由餐饮运营发起"},
+      {id:"a",x:400,y:150,type:"Agent",skill:"图片分类",title:"识别菜品类型",desc:"热菜/甜点分流"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"智能抠图",title:"抠出菜品主体",desc:"干净背景"},
+      {id:"c",x:400,y:370,type:"Agent",skill:"AI 调色",title:"统一暖色调",desc:"品牌视觉规范"},
+      {id:"d",x:400,y:480,type:"Agent",skill:"场景生成",title:"补餐厅氛围",desc:"生成探店图"},
+      {id:"e",x:400,y:590,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
+      {id:"f",x:400,y:700,type:"Agent",skill:"多平台发布",title:"发小红书九宫格",desc:"通过即发"}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e"},{from:"e",to:"f",label:"通过"}]},
+  "广告物料批产":{nodes:[
+      {id:"t",x:400,y:40,type:"触发器",skill:"手动触发",title:"上传活动主视觉",desc:"由营销发起"},
+      {id:"a",x:400,y:150,type:"Agent",skill:"图片分类",title:"识别素材类型",desc:"KV/产品分流"},
+      {id:"b",x:400,y:260,type:"Agent",skill:"AI 调色",title:"统一活动色调",desc:"品牌色规范"},
+      {id:"c",x:400,y:370,type:"Agent",skill:"文案生成",title:"生成多版海报文案",desc:"A/B 文案"},
+      {id:"d",x:400,y:480,type:"判断",skill:"合规审核",title:"是否合规?",desc:"违规则打回"},
+      {id:"e",x:230,y:600,type:"Agent",skill:"多平台发布",title:"分发各渠道",desc:"信息流+朋友圈"},
+      {id:"f",x:570,y:600,type:"Agent",skill:"文案生成",title:"重做文案",desc:"打回重写"}
+    ],edges:[{from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e",label:"通过"},{from:"d",to:"f",label:"打回"}]}
+};
+
+const MEDIA = [
+  {nm:"SKU_8842_主图",tp:"商品",sz:"4.2MB",c:"linear-gradient(135deg,#f6d365,#fda085)"},
+  {nm:"婚纱_外景_03",tp:"人像",sz:"8.1MB",c:"linear-gradient(135deg,#a1c4fd,#c2e9fb)"},
+  {nm:"旅拍_冰川",tp:"风光",sz:"12.6MB",c:"linear-gradient(135deg,#84fab0,#8fd3f4)"},
+  {nm:"产品_耳环_A",tp:"商品",sz:"3.0MB",c:"linear-gradient(135deg,#fbc2eb,#a6c1ee)"},
+  {nm:"Vlog_西藏_DAY2",tp:"视频",sz:"1.2GB",c:"linear-gradient(135deg,#d4fc79,#96e6a1)"},
+  {nm:"客片_全家福",tp:"人像",sz:"9.4MB",c:"linear-gradient(135deg,#ffecd2,#fcb69f)"},
+  {nm:"风光_海岸线",tp:"风光",sz:"15.0MB",c:"linear-gradient(135deg,#a18cd1,#fbc2eb)"},
+  {nm:"短视频_口播",tp:"视频",sz:"640MB",c:"linear-gradient(135deg,#fccb90,#d57eeb)"}
+];
+
+let TPLS = [
+  {nm:"商品图生产线",desc:"原图分类→抠图→调色→AIGC补场景→合规审核→多平台发布。电商上新批量出图。",tg:["电商","上新"],key:"商品图生产线"},
+  {nm:"美食探店图",desc:"菜品抠底→统一暖色调→补餐厅氛围→生成探店九宫格发小红书。餐饮连锁标准化。",tg:["餐饮","探店"],key:"美食探店图"},
+  {nm:"婚纱写真交付",desc:"精修调色→背景增强→生成预览相册→客户审片，不满意自动打回重修。",tg:["婚纱","客片"],key:"婚纱写真交付"},
+  {nm:"地产民宿图标准化",desc:"空间图统一调色校正→按平台规格出图→多平台发布。",tg:["地产","民宿"],key:"商品图生产线"},
+  {nm:"广告物料批产",desc:"主视觉统一色调→生成多版海报文案→合规→多渠道分发，文案不过自动重写。",tg:["广告","营销"],key:"广告物料批产"},
+  {nm:"旅拍 Vlog 粗剪",desc:"素材导入→高光分镜→配乐字幕→合规审核→推送审核。",tg:["旅拍","视频"],key:"旅拍Vlog粗剪"},
+  {nm:"自媒体矩阵线",desc:"成片剪横竖两版→生成标题→合规→多平台分发→数据复盘反推选题。",tg:["小红书","矩阵"],key:"自媒体矩阵线"},
+  {nm:"活动跟拍即时出片",desc:"现场粗修→即时生成图文纪要→推送参会者。发布会/会议场景。",tg:["活动","即时"],key:"商品图生产线"}
+];
+
+let DELIV = [
+  {c:"抖音旗舰店 · 夏季上新",t:"商品图",p:100,s:"已交付",st:"p-teal"},
+  {c:"连锁餐饮 B · 探店九宫格",t:"美食探店",p:100,s:"已交付",st:"p-teal"},
+  {c:"客户 A · 婚纱套系",t:"写真交付",p:60,s:"待客户审片",st:"p-amber"},
+  {c:"品牌 C · 民宿空间图",t:"地产标准化",p:80,s:"运行中",st:"p-blue"},
+  {c:"营销活动 · 广告物料",t:"物料批产",p:45,s:"已打回重做",st:"p-coral"}
+];
+
+/* ============ 闭环运行时状态（动态，来自真实运行） ============ */
+let currentWF=null;        // 当前画布工作流 {nodes,edges,reworkLoop,lineName}
+let runState={running:false,seq:0,pending:null}; // pending={order,idx,wf,reviewId,backTo}
+let REVIEW = [
+  {id:"r1",t:"客户 A · 婚纱套系",s:"待客户审片",c:"linear-gradient(135deg,#ffecd2,#fcb69f)",req:"背景色调偏暖，人物更突出",from:"seed",rounds:1,backTo:"c"},
+  {id:"r2",t:"营销活动 · 广告物料",s:"已打回重做",c:"linear-gradient(135deg,#fbc2eb,#a6c1ee)",req:"主视觉文案需换 A 版，红色太刺眼",from:"seed",rounds:2,backTo:"c"},
+  {id:"r3",t:"品牌 C · 民宿空间图",s:"待客户审片",c:"linear-gradient(135deg,#a1c4fd,#c2e9fb)",req:"客厅图亮度再提一档",from:"seed",rounds:1,backTo:"c"}
+];
+
+let RUNS = [
+  {id:"RUN-2041",nm:"商品图生产线 · 抖音旗舰店",st:"成功",cls:"p-teal",time:"2026-08-11 14:22",dur:"2m13s",cost:"¥0.42",nodes:6},
+  {id:"RUN-2040",nm:"广告物料批产 · 营销活动",st:"打回重做",cls:"p-coral",time:"2026-08-11 13:50",dur:"1m48s",cost:"¥0.31",nodes:6},
+  {id:"RUN-2039",nm:"美食探店图 · 连锁餐饮 B",st:"成功",cls:"p-teal",time:"2026-08-11 11:05",dur:"3m02s",cost:"¥0.55",nodes:6},
+  {id:"RUN-2038",nm:"婚纱写真交付 · 客户 A",st:"待审片",cls:"p-amber",time:"2026-08-11 10:31",dur:"4m20s",cost:"¥0.78",nodes:5}
+];
+
+const BRANDS = [
+  {nm:"旗舰店品牌规范",color:["#E63946","#F1FAEE","#1D3557"],font:"思源黑体 / 阿里普惠",logo:"VA-红",ban:"禁止人脸入镜、禁止水印叠加",used:"商品图生产线、自媒体矩阵线"},
+  {nm:"餐饮探店规范",color:["#F4A261","#E76F51","#264653"],font:"站酷快乐体",logo:"VA-橙",ban:"禁止过度滤镜、禁止文字压图",used:"美食探店图"},
+  {nm:"民宿空间规范",color:["#A8DADC","#457B9D","#2A9D8F"],font:"苹方 / 思源宋体",logo:"VA-青",ban:"禁止畸变广角、禁止饱和过载",used:"地产民宿空间图"}
+];
+
+const CHANNELS = [
+  {n:"抖音",ic:"🎵",s:"已连接",on:true},
+  {n:"小红书",ic:"📕",s:"已连接",on:true},
+  {n:"视频号",ic:"🟢",s:"未连接",on:false},
+  {n:"微信公众号",ic:"💬",s:"未连接",on:false},
+  {n:"淘宝",ic:"🛒",s:"已连接",on:true}
+];
+
+/* ============ 导航 ============ */
+const CRUMB = {home:"工作台",lines:"生产线",skills:"技能工坊",media:"素材库",templates:"模板中心",delivery:"交付管理",review:"审片台",runs:"运行记录",brand:"品牌中心",account:"账户与集成",settings:"设置"};
+function goView(v){
+  document.querySelectorAll(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.view===v));
+  document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
+  document.getElementById("view-"+v).classList.add("active");
+  document.getElementById("crumb").innerHTML="VisionAgent / <b>"+CRUMB[v]+"</b>";
+  if(v==="media") renderMedia("all");
+  if(v==="templates") renderTpl();
+  if(v==="delivery") renderDeliv();
+  if(v==="review") renderReview();
+  if(v==="runs") renderRuns();
+  if(v==="brand") renderBrand();
+  if(v==="account") renderChannels();
+}
+document.querySelectorAll(".nav-item").forEach(n=>n.onclick=()=>goView(n.dataset.view));
+function goLines(pre){ if(pre) document.getElementById("prompt").value=pre; goView("lines"); }
+
+/* ============ 技能工坊 子tab ============ */
+document.querySelectorAll(".subtab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".subtab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");
+  document.getElementById("sub-builtin").style.display = t.dataset.sub==="builtin"?"block":"none";
+  document.getElementById("sub-custom").style.display = t.dataset.sub==="custom"?"block":"none";
+});
+
+/* ============ 渲染 ============ */
+function renderSkillLib(){document.getElementById("skillGrid").innerHTML=SKILLS.map(s=>`
+  <div class="skill"><span class="cat">${s.cat}</span><h4>${s.name}</h4><p>${s.desc}</p>
+  <div class="io">输入：${s.in}<br>输出：${s.out}</div></div>`).join("");}
+let selectedAssets=[];
+function toggleAsset(i){
+  const m=MEDIA[i];
+  const idx=selectedAssets.indexOf(m.nm);
+  if(idx>=0)selectedAssets.splice(idx,1);else selectedAssets.push(m.nm);
+  const active=document.querySelector("#mediaFilters .fchip.active");
+  renderMedia(active?active.dataset.f:"all");
+}
+function renderMedia(f){
+  const list=MEDIA.filter(m=>f==="all"||m.tp===f);
+  document.getElementById("mediaGrid").innerHTML=list.map(m=>{
+    const sel=selectedAssets.indexOf(m.nm)>=0;
+    return `<div class="asset" style="cursor:pointer;${sel?'border:1.5px solid var(--primary)':''}" onclick="toggleAsset(${MEDIA.indexOf(m)})">
+    <div class="thumb" style="background:${m.c}"></div>
+    <div class="meta"><div class="nm">${m.nm}${sel?' ✓':''}</div><div class="sub">${m.tp} · ${m.sz}${sel?' · 已选':''}</div></div></div>`;
+  }).join("");
+  const hint=document.getElementById("assetHint");
+  if(hint)hint.innerHTML=selectedAssets.length
+    ?`已选 <b style="color:var(--primary-d)">${selectedAssets.length}</b> 个素材用于本次运行：${selectedAssets.join("、")}`
+    :`点击素材卡片选中，用于「运行」时作为本次生产线的输入素材`;
+}
+function renderTpl(){document.getElementById("tplGrid").innerHTML=TPLS.map(t=>`
+  <div class="tpl"><h4>${t.nm}</h4><p>${t.desc}</p>
+  <div class="tg">${t.tg.map(x=>`<span>${x}</span>`).join("")}</div>
+  <button class="btn sm" onclick="useTpl('${t.key}')">使用模板</button></div>`).join("");}
+function renderDeliv(){document.getElementById("delivBody").innerHTML=DELIV.map(d=>{
+  const canReview=(d.s==="待客户审片"||d.s==="已打回重做");
+  const act=canReview?`<button class="btn sm ghost" onclick="goView('review')">去审片</button>`:`<span style="font-size:12px;color:var(--muted)">—</span>`;
+  const thumb=d.imgUrl?`<img src="${d.imgUrl}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;display:block" alt="成片">`:`<span style="font-size:11px;color:var(--muted)">—</span>`;
+  return `<tr><td>${d.c}</td><td>${d.t}</td><td>${thumb}</td>
+  <td><span class="bar-mini"><i style="width:${d.p}%"></i></span> ${d.p}%</td>
+  <td><span class="pill ${d.st}">${d.s}</span></td><td>${act}</td></tr>`;}).join("");}
+function useTpl(key){
+  const t=TEMPLATES[key];
+  goView("lines");
+  if(!t){const p=document.getElementById("prompt");p.value="使用模板："+key;return;}
+  // 直接恢复已保存的画布数据（无需重新调 Coze）
+  currentTplName=key;
+  document.getElementById("wfMount").style.display="block";
+  renderWorkflow(key);
+  registerWF({lineName:key,reworkLoop:t.reworkLoop||{}},t,key);
+  const h=document.getElementById("resultHint");
+  h.textContent="已加载模板：「"+key+"」— 点「▶ 运行」执行，或修改后重新「存为模板」";
+  h.style.display="block";
+  setRunStatus("模板已加载 · 可编辑 / 运行","");
+}
+
+/* ============ 审片台 ============ */
+function renderReview(){document.getElementById("revList").innerHTML=REVIEW.map(r=>{
+  const cls=r.s==="已通过"?"p-teal":r.s==="已打回重做"?"p-coral":"p-amber";
+  const roundsInfo=(r.rounds&&r.rounds>1)?` · 第${r.rounds}轮`:"";
+  const act=r.s==="已通过"?"已处理":(r.s==="已打回重做"?"查看原因":"点击审片");
+  const thumbStyle=r.imgUrl?`style="background-image:url('${r.imgUrl}');background-size:cover;background-position:center"`:`style="background:${r.c}"`;
+  return `<div class="rev-item" onclick="openReview('${r.id}',this)">
+    <div class="rev-thumb ${r.imgUrl?'has-img':''}" ${thumbStyle}></div>
+    <div class="rev-meta"><div class="t">${r.t}${roundsInfo}</div><div class="s">${r.s} · ${act}</div></div>
+    <span class="pill ${cls}">${r.s}</span>
+  </div>`;}).join("");}
+function openReview(id,el){
+  const r=REVIEW.find(x=>x.id===id);
+  document.querySelectorAll(".rev-item").forEach(e=>e.classList.remove("active"));
+  if(el) el.classList.add("active");
+  const roundsInfo=(r.rounds&&r.rounds>1)?` · <span style="color:var(--coral)">第 ${r.rounds} 轮</span>`:"";
+  const statusPill=r.s==="已通过"?'<span class="pill p-teal">已通过</span>':r.s==="已打回重做"?'<span class="pill p-coral">已打回重做</span>':'<span class="pill p-amber">待审核</span>';
+  const imgStyle=r.imgUrl?`style="background-image:url('${r.imgUrl}');background-size:cover;background-position:center"`:`style="background:${r.c}"`;
+  const imgTag=r.imgUrl?'（AI 真实生成）':'（演示占位）';
+  document.getElementById("revDetail").innerHTML=`
+    <div class="hint">${r.t}${roundsInfo} ${statusPill} <span style="font-size:11px;color:var(--muted)">${imgTag}</span></div>
+    <div class="rev-img" ${imgStyle}></div>
+    <div style="font-size:12px;color:var(--muted)">需求 / 反馈：${r.req}</div>
+    <textarea class="annot" placeholder="填写批注（如：第二张背景再虚化一点）"></textarea>
+    <div class="rev-actions">
+      <button class="btn edit-only" onclick="reviewPass('${r.id}')">✓ 通过</button>
+      <button class="btn danger edit-only" onclick="reviewReject('${r.id}')">↩ 打回重做</button>
+    </div>`;
+}
+function renderRuns(){
+  document.getElementById("runsList").innerHTML=RUNS.map(r=>`
+  <div class="run-row" onclick="openRun('${r.id}')">
+    <span class="pill ${r.cls}">${r.st}</span>
+    <span class="nm">${r.nm}</span>
+    <span style="font-size:12px;color:var(--muted)">${r.time}</span>
+    <span style="font-size:12px;color:var(--muted)">${r.dur}</span>
+    <span style="font-size:12px;color:var(--muted)">${r.cost}</span>
+  </div>`).join("");
+  refreshReviewPanel();
+}
+/* 复盘面板：从运行记录实时计算成功率/打回率/平均耗时/累计消耗 */
+function refreshReviewPanel(){
+  const total=Math.max(1,RUNS.length);
+  const ok=RUNS.filter(r=>r.st==="成功").length;
+  const rej=RUNS.filter(r=>r.st==="打回重做"||r.st==="待审片").length;
+  const mins=RUNS.map(r=>parseInt(String(r.dur||"0m").split("m")[0],10)||0);
+  const avg=mins.length?Math.round(mins.reduce((a,b)=>a+b,0)/mins.length):0;
+  const cost=RUNS.reduce((s,r)=>s+parseFloat(String(r.cost||"0").replace("¥","")||0),0);
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  set("rpOk",(ok/total*100).toFixed(0)+"%");
+  set("rpRej",(rej/total*100).toFixed(0)+"%");
+  set("rpDur",avg+"m");
+  set("rpCost","¥"+cost.toFixed(2));
+}
+function openRun(id){
+  const r=RUNS.find(x=>x.id===id);
+  document.getElementById("runDetail").style.display="block";
+  const logs=r.logs?r.logs.map(l=>l.replace(/</g,"&lt;")).join("\n"):`[14:22:01] 触发器「上传原图」OK
+[14:22:03] 图片分类 → 商品 (置信度 0.97)
+[14:22:09] 智能抠图 OK (透明底图 1024×1024)
+[14:22:18] AI 调色 → 抖音规格 OK
+[14:22:40] 场景生成 OK
+[14:22:55] 合规审核 → ${r.st==='打回重做'?'不通过，打回调色':'通过'}
+${r.st==='打回重做'?'[14:23:10] ↩ 回到「AI 调色」重做\n':'[14:23:02] 多平台发布 → 抖音+淘宝 OK\n'}[14:23:30] 运行结束`;
+  document.getElementById("runDetail").innerHTML=`
+    <h3>${r.nm} · ${r.id}</h3>
+    <div class="row"><span>状态</span><span class="pill ${r.cls}">${r.st}</span></div>
+    <div class="row"><span>耗时 / 消耗</span><span>${r.dur} · ${r.cost}</span></div>
+    <div class="row"><span>节点数</span><span>${r.nodes}</span></div>
+    <div style="margin-top:12px;font-size:12px;color:var(--muted)">节点级日志</div>
+    <div class="log">${logs}</div>`;
+}
+function renderBrand(){document.getElementById("brandGrid").innerHTML=BRANDS.map((b,i)=>`
+  <div class="brand-card"><h4>${b.nm}</h4>
+    <div class="swatch-row">${b.color.map(c=>`<div class="swatch" style="background:${c}"></div>`).join("")}</div>
+    <div class="kv">字体：${b.font}<br>Logo：${b.logo}<br>禁用：${b.ban}<br>已应用于：${b.used}</div>
+    <button class="btn sm ghost edit-only" style="margin-top:10px" onclick="applyBrand(${i})">应用到 AI 调色节点</button>
+  </div>`).join("");}
+/* 品牌 → 当前工作流「AI 调色/调性」节点联动 */
+function applyBrand(i){
+  const b=BRANDS[i];
+  if(!currentWF){alert("请先在「生产线」页生成工作流，再应用品牌");return;}
+  let hit=0;
+  currentWF.nodes.forEach(n=>{
+    if(/调色|调性|风格/i.test((n.title||"")+(n.skill||""))){n.brand=b.nm;hit++;}
+  });
+  currentWF.lineName=(currentWF.lineName||"生产线")+"（品牌："+b.nm+"）";
+  TEMPLATES[currentWF.lineName]=JSON.parse(JSON.stringify(currentWF));
+  currentTplName=currentWF.lineName;
+  renderWorkflow(currentTplName);
+  alert(hit?("品牌「"+b.nm+"」已应用到 "+hit+" 个调色节点：色板 "+b.color.join(" / ")+" ✓ 点节点可查看引用")
+       :"当前工作流没有「AI 调色」类节点；品牌已记录到生产线名称，生成调色节点后即生效");
+}
+function renderChannels(){document.getElementById("channelList").innerHTML=CHANNELS.map((c,i)=>`
+  <div class="channel"><div class="dotc">${c.ic}</div>
+    <div class="ci"><div class="cn">${c.n}</div><div class="cs ${c.on?'connected':''}">${c.s}</div></div>
+    <button class="btn sm ${c.on?'ghost':''}" onclick="toggleChannel(${i})">${c.on?'断开':'连接'}</button></div>`).join("");}
+function toggleChannel(i){CHANNELS[i].on=!CHANNELS[i].on;CHANNELS[i].s=CHANNELS[i].on?'已连接':'未连接';renderChannels();}
+function setRole(role){
+  document.body.classList.remove("role-admin","role-member","role-viewer");
+  document.body.classList.add("role-"+role);
+}
+
+/* ============ Workflow 画布 ============ */
+let currentNodes=[],selectedId=null,currentTplName="商品图生产线";
+function pickTemplate(text){
+  if(/婚纱|写真|客片|全家福/i.test(text)) return "婚纱写真交付";
+  if(/旅拍|短片|素材|vlog/i.test(text)) return "旅拍Vlog粗剪";
+  if(/小红书|矩阵|自媒体|成片|标题/i.test(text)) return "自媒体矩阵线";
+  if(/美食|菜品|探店|餐厅|餐饮/i.test(text)) return "美食探店图";
+  if(/广告|海报|营销|物料|活动主视觉/i.test(text)) return "广告物料批产";
+  if(/地产|民宿|空间|楼盘/i.test(text)) return "商品图生产线";
+  return "商品图生产线";
+}
+function renderWorkflow(tplName){
+  const tpl=TEMPLATES[tplName]; currentNodes=tpl.nodes;
+  const W=Math.max(820, Math.max(...tpl.nodes.map(n=>n.x))+170), H=Math.max(760, Math.max(...tpl.nodes.map(n=>n.y))+170);
+  let edges=tpl.edges.map(e=>{
+    const a=tpl.nodes.find(n=>n.id===e.from),b=tpl.nodes.find(n=>n.id===e.to);
+    const x1=a.x,y1=a.y+46,x2=b.x,y2=b.y-46,my=(y1+y2)/2;
+    const label=e.label?`<text x="${(x1+x2)/2+6}" y="${my-4}" font-size="12" fill="#BA7517">${e.label}</text>`:"";
+    return `<path d="M${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}" fill="none" stroke="#9aa3ad" stroke-width="1.5" marker-end="url(#ar)"/>${label}`;
+  }).join("");
+  let nodes=tpl.nodes.map(n=>{
+    const color=n.type==="触发器"?"#FAEEDA":n.type==="判断"?"#E1F5EE":"#E8F0FE";
+    const stroke=n.type==="触发器"?"#BA7517":n.type==="判断"?"#0F6E56":"#2F6FED";
+    return `<g class="node-rect" id="node-${n.id}" onclick="selectNode('${n.id}')">
+      <rect x="${n.x-110}" y="${n.y-46}" width="220" height="92" rx="10" fill="${color}" stroke="${stroke}" stroke-width="1"/>
+      <text x="${n.x}" y="${n.y-22}" text-anchor="middle" font-size="12" fill="${stroke}" font-weight="500">${n.type}${n.skill?(" · "+n.skill):""}</text>
+      <text x="${n.x}" y="${n.y-2}" text-anchor="middle" font-size="13" fill="#1f2937" font-weight="500">${n.title}</text>
+      <text x="${n.x}" y="${n.y+20}" text-anchor="middle" font-size="11.5" fill="#6b7280">${n.desc}</text></g>`;
+  }).join("");
+  document.getElementById("canvas").innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#9aa3ad" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+    ${edges}${nodes}</svg>`;
+  selectedId=null;
+  document.getElementById("prop").innerHTML=`<p class="hint">点击左侧画布中的任意节点，查看 / 编辑其 Skill 与参数。</p>`;
+}
+function selectNode(id){
+  selectedId=id;
+  document.querySelectorAll(".node-rect").forEach(g=>g.classList.remove("node-selected"));
+  document.getElementById("node-"+id).classList.add("node-selected");
+  const n=currentNodes.find(x=>x.id===id);
+  const so=SKILLS.find(s=>s.name===n.skill)||{in:"—",out:"—",desc:n.desc};
+  const brandLine=n.brand?`<div class="skill" style="color:var(--coral)">🎨 引用品牌：${n.brand}</div>`:"";
+  document.getElementById("prop").innerHTML=`
+    <h3>${n.title}</h3><div class="skill">${n.type} · 调用 Skill：${n.skill}</div>${brandLine}
+    <label>节点名称</label><input value="${n.title}">
+    <label>使用 Skill</label><select>${SKILLS.map(s=>`<option ${s.name===n.skill?"selected":""}>${s.name}</option>`).join("")}</select>
+    <label>参数配置（演示）</label><input value="${n.desc}">
+    <div class="io"><b>输入：</b>${so.in}<br><b>输出：</b>${so.out}</div>
+    <p class="hint" style="margin-top:12px">参数修改仅在前端演示，真实生效需后端接入 Skill 执行引擎。</p>`;
+}
+/* 把扣子返回的 JSON（trigger/action/condition 节点 + edges）自动分层布局成画布坐标 */
+function layoutLine(obj){
+  const nodes=obj.nodes||[], edges=obj.edges||[];
+  // 打回/重做类边是回退边，不参与正向分层（否则会形成环把节点推到错误列）
+  const backSet=new Set();
+  edges.forEach(e=>{ if(/打回|重做|退回|rework/i.test(e.label||"")) backSet.add(e.from+"->"+e.to); });
+  // 最长路径分层（Bellman-Ford 风格松弛），忽略回退边
+  const layer={}; nodes.forEach(n=>layer[n.id]=0);
+  for(let k=0;k<nodes.length;k++){
+    edges.forEach(e=>{
+      if(backSet.has(e.from+"->"+e.to)) return;
+      if(layer[e.from]+1>layer[e.to]) layer[e.to]=layer[e.from]+1;
+    });
+  }
+  const byLayer={}; nodes.forEach(n=>{(byLayer[layer[n.id]]=byLayer[layer[n.id]]||[]).push(n);});
+  const colW=250,rowH=120,x0=150,y0=90,typeMap={trigger:"触发器",action:"Agent",condition:"判断"};
+  const laid=nodes.map(n=>{
+    const arr=byLayer[layer[n.id]]||[n], idx=arr.indexOf(n);
+    return {id:n.id,x:x0+layer[n.id]*colW,y:y0+idx*rowH,type:typeMap[n.type]||"Agent",
+            skill:n.skill||"",title:n.label||n.skill||"节点",desc:n.skill?("调用 "+n.skill):"触发入口"};
+  });
+  return {nodes:laid,edges:edges.map(e=>({from:e.from,to:e.to,label:e.label||""}))};
+}
+
+const FRONT_FALLBACK={lineName:"商品图生产线（演示）",industry:"电商",
+  nodes:[
+    {id:"t",type:"trigger",label:"素材入库",skill:null,params:{}},
+    {id:"a",type:"action",label:"图片分类",skill:"图片分类",params:{by:"品类"}},
+    {id:"b",type:"action",label:"智能抠图",skill:"智能抠图",params:{subject:"商品主体"}},
+    {id:"c",type:"action",label:"AI调色",skill:"AI调色",params:{style:"抖音风"}},
+    {id:"d",type:"action",label:"场景生成",skill:"场景生成",params:{scene:"直播间背景"}},
+    {id:"e",type:"condition",label:"合规审核",skill:"合规审核",params:{rules:["无侵权","无违规"]}},
+    {id:"f",type:"action",label:"多平台发布",skill:"多平台发布",params:{channels:["抖音","小红书"]}}
+  ],
+  edges:[
+    {from:"t",to:"a"},{from:"a",to:"b"},{from:"b",to:"c"},{from:"c",to:"d"},{from:"d",to:"e"},
+    {from:"e",to:"f",label:"通过"},{from:"e",to:"c",label:"打回重做"}
+  ],
+  reworkLoop:{condition:"合规不通过",backTo:"c"}
+};
+function extractFront(text){
+  let t=(text||"").trim().replace(/^```(?:json)?/i,"").replace(/```$/i,"").trim();
+  const s=t.indexOf("{");const e=t.lastIndexOf("}");
+  if(s>=0&&e>=0)t=t.slice(s,e+1);return JSON.parse(t);
+}
+const COZE_PROXY_URL="https://1466923365-czw28jkc4f.ap-guangzhou.tencentscf.com"; /* 腾讯云 SCF 函数 URL（国内云函数代理，代持 COZE_API_KEY 真调 Coze），大陆浏览器可真调，告别 Failed to fetch。改完需重新部署 CloudStudio 生效。 */
+async function generate(){
+  const text=document.getElementById("prompt").value.trim();
+  if(!text){alert("请先描述你想搭建的视觉内容智能体 🙂");return;}
+  document.querySelectorAll("#steps .step").forEach(s=>s.classList.remove("done"));
+  const seq=["intent","skill","plan","render"];let i=0;
+  const tick=setInterval(()=>{document.querySelector(`#steps .step[data-k="${seq[i]}"]`).classList.add("done");i++;if(i>=seq.length)clearInterval(tick);},500);
+  document.getElementById("resultHint").style.display="none";
+  let demoMode=false,obj=null,name="",mockTag=false,source="";
+  try{
+    if(COZE_PROXY_URL){
+      const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:text})});
+      let data={};try{data=await res.json();}catch(_){}
+      if(res.ok&&data&&!data.error){obj=data.json||(data.text?extractFront(data.text):null);mockTag=!!data.mock;source="coze";}
+    }
+    if(!obj||!obj.nodes){obj=FRONT_FALLBACK;demoMode=true;}
+    if(obj.clarify){document.getElementById("resultHint").textContent="智能体需要补充信息："+obj.question;document.getElementById("resultHint").style.display="block";return;}
+    const lf=layoutLine(obj);
+    name=obj.lineName||"我的生产线";
+    TEMPLATES[name]=lf;currentTplName=name;
+    document.getElementById("wfMount").style.display="block";
+    renderWorkflow(name);
+    registerWF(obj,lf,name);
+    const tag=source==="coze"?(mockTag?"（示例数据）已通过 Coze 生成工作流：":"已通过 Coze 智能体实时生成工作流："):"（演示数据 · 线上未接入代理；部署 Cloudflare Worker 后此处即为真实 Coze 调用）已生成工作流：";
+    document.getElementById("resultHint").textContent=tag+name;
+    document.getElementById("resultHint").style.display="block";
+  }catch(err){
+    clearInterval(tick);
+    // 网络不可达或代理异常 → 降级演示，保证可看可交互
+    const lf=layoutLine(FRONT_FALLBACK);
+    name=FRONT_FALLBACK.lineName;
+    TEMPLATES[name]=lf;currentTplName=name;
+    document.getElementById("wfMount").style.display="block";
+    renderWorkflow(name);
+    registerWF(FRONT_FALLBACK,lf,name);
+    const errMsg=(err&&err.message)?err.message:"网络不可达";
+    const diag="代理地址："+COZE_PROXY_URL+"\n错误："+errMsg+"\n\n排查建议：\n1. 若开启了梯子/Clash/VPN，请关闭或把 *.tencentscf.com 加入直连；\n2. 不要直接双击 index.html，请用 start-local.bat 启动 localhost:8080；\n3. 也可直接到扣子体验真实智能体。";
+    document.getElementById("resultHint").innerHTML="（演示数据 · "+errMsg+"，已降级）已生成工作流："+name+" <a href='#' onclick='alert(`"+diag+"`);return false;' style='color:#ff6b6b;text-decoration:underline'>查看诊断</a>";
+    document.getElementById("resultHint").style.display="block";
+  }
+}
+const samples=["帮我搭一条商品图生产线：原图进来先分类，再智能抠图，按抖音规范调色，用 AIGC 补场景，合规不过就打回重做，最后发到各平台",
+  "把一次旅拍素材自动粗剪成带配乐字幕的短片，审核通过后推给我看",
+  "婚纱客片修图后自动生成预览相册推给客户，不满意就打回重修"];
+document.getElementById("chips").innerHTML=samples.map(s=>`<span class="chip" onclick="document.getElementById('prompt').value=this.textContent">${s}</span>`).join("");
+document.getElementById("genBtn").onclick=generate;
+document.getElementById("backBtn").onclick=()=>{document.getElementById("wfMount").style.display="none";document.getElementById("resultHint").style.display="block";};
+document.getElementById("runBtn").onclick=startRun;
+document.getElementById("stopBtn").onclick=stopRun;
+document.getElementById("exportBtn").onclick=()=>{
+  if(!currentWF){alert("请先「生成工作流」");return;}
+  const pubNodes=currentWF.nodes.filter(n=>/发布|推送|分发/i.test(n.title+n.skill||""));
+  const chs=CHANNELS.filter(c=>c.on).map(c=>c.n);
+  if(pubNodes.length&&chs.length) alert("已发布到："+chs.join(" + ")+" ✓\n（审核通过的成片已进入发布节点，可在「交付管理/运行记录」查看）");
+  else alert("当前生产线无发布节点，或尚未授权渠道。可在「账户与集成」中连接渠道。");
+};
+document.getElementById("saveTplBtn").onclick=()=>{
+  if(!currentWF){alert("请先生成工作流，再存为模板");return;}
+  const nm=currentWF.lineName||"我的生产线";
+  TEMPLATES[nm]=JSON.parse(JSON.stringify(currentWF)); // 保存真实画布数据（含 reworkLoop/品牌）
+  if(!TPLS.some(t=>t.key===nm)) TPLS.unshift({nm:nm,desc:"由自然语言生成并保存的自定义生产线，含运行 / 审片 / 品牌配置，可一键复用。",tg:["我的","自定义"],key:nm});
+  renderTpl();
+  alert("已存为模板：「"+nm+"」✓ 可在「模板中心」一键复用（含完整画布与配置）");
+};
+document.getElementById("mediaFilters").querySelectorAll(".fchip").forEach(f=>f.onclick=()=>{
+  document.querySelectorAll("#mediaFilters .fchip").forEach(x=>x.classList.remove("active"));
+  f.classList.add("active");renderMedia(f.dataset.f);});
+
+/* ============ 闭环引擎：运行 → 审片 → 打回 → 发布 → 复盘 ============ */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function nowStr(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;}
+function setRunStatus(msg,cls){const el=document.getElementById("runStatus");if(el){el.textContent=msg;el.className="run-status "+(cls||"");}}
+
+function registerWF(obj,lf,name){
+  currentWF={nodes:lf.nodes,edges:lf.edges,reworkLoop:obj.reworkLoop||{},lineName:name};
+  setRunStatus("已生成 · 点「▶ 运行」执行流水线","");
+}
+/* 拓扑排序（仅跳过打回/重做回退边，通过边保留） */
+function topoOrder(wf){
+  const back=new Set();
+  wf.edges.forEach(e=>{if(/打回|重做|退回|rework/i.test(e.label||""))back.add(e.from+"->"+e.to);});
+  const indeg={},adj={};
+  wf.nodes.forEach(n=>{indeg[n.id]=0;adj[n.id]=[];});
+  wf.edges.forEach(e=>{if(back.has(e.from+"->"+e.to))return;adj[e.from].push(e.to);indeg[e.to]++;});
+  const q=wf.nodes.filter(n=>!indeg[n.id]).map(n=>n.id),res=[];
+  while(q.length){
+    const id=q.shift();res.push(id);
+    (adj[id]||[]).forEach(t=>{if(--indeg[t]===0)q.push(t);});
+  }
+  wf.nodes.forEach(n=>{if(res.indexOf(n.id)<0)res.push(n.id);});
+  return res;
+}
+function findBackTo(wf,condId){
+  const rl=wf.reworkLoop;
+  if(rl&&rl.backTo)return rl.backTo;
+  const re=wf.edges.find(e=>e.from===condId&&/打回|重做|退回|rework/i.test(e.label||""));
+  if(re)return re.to;
+  const idx=wf.nodes.findIndex(n=>n.id===condId);
+  return wf.nodes[Math.max(0,idx-1)].id;
+}
+/* 执行一段节点（fromIdx..toIdx）；遇「判断」节点暂停进审片台；日志累计到 ctx.logs */
+async function runSegment(order,fromIdx,toIdx,wf,ctx){
+  for(let i=fromIdx;i<=toIdx;i++){
+    if(!runState.running){ctx.logs.push("["+nowStr()+"] ⏹ 运行已停止");return false;}
+    const n=wf.nodes.find(x=>x.id===order[i]);
+    const g=document.getElementById("node-"+n.id);
+    if(g){g.classList.remove("node-exec","node-rework");g.classList.add("node-exec");g.scrollIntoView({block:"center",behavior:"smooth"});}
+    if(n.type==="判断"){
+      ctx.logs.push("["+nowStr()+"] ⚖️ "+n.title+" → 进入审片台，等待人工审核");
+      const reviewId=pushReviewTask(wf,n,ctx);
+      ctx.reviewId=reviewId;ctx.idx=i;
+      runState.pending=ctx;
+      setRunStatus("⏳ 等待审片 · 请到「审片台」处理","warn");
+      if(g)setTimeout(()=>g.classList.remove("node-exec"),700);
+      return false;
+    }
+    // 图像节点：真实调用 AI 图像生成（场景生成 / AI 调色 / 智能抠图）
+    if(isImgNode(n)){
+      await sleep(400);
+      ctx.logs.push("["+nowStr()+"] 🎨 "+n.title+" → 调用 AI 图像生成…");
+      setRunStatus("🎨 "+n.title+" · AI 真实生成中…","busy");
+      const matHint=selectedAssets.length?("，输入素材："+selectedAssets.join("、")):"";
+      const imgUrl=await fetchRealImage((wf.lineName||"")+"，"+(n.title||"")+"，"+(n.desc||"")+matHint);
+      if(imgUrl){ctx.imgUrl=imgUrl;ctx.logs.push("["+nowStr()+"] ✔ "+n.title+" → AI 出图完成");}
+      else{ctx.logs.push("["+nowStr()+"] ⚠ "+n.title+" → 图像服务暂不可用，已用占位图");}
+      if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+      ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
+      continue;
+    }
+    await sleep(650);
+    ctx.logs.push("["+nowStr()+"] "+n.title+" → OK");
+    if(g){g.classList.remove("node-exec");g.classList.add("node-done");}
+    ctx.cost=Math.round((ctx.cost+Math.random()*0.12+0.03)*100)/100;
+  }
+  return true;
+}
+function pushReviewTask(wf,condNode,ctx){
+  runState.seq++;
+  const reqs=["背景色调偏暖，人物更突出","主视觉文案需换一版，颜色太刺眼","亮度再提一档，构图微调","左侧留白多些，标题更醒目","成片风格偏冷，改为暖色调"];
+  const grads=["linear-gradient(135deg,#ffecd2,#fcb69f)","linear-gradient(135deg,#a1c4fd,#c2e9fb)","linear-gradient(135deg,#fbc2eb,#a6c1ee)","linear-gradient(135deg,#d4fc79,#96e6a1)","linear-gradient(135deg,#84fab0,#8fd3f4)"];
+  const item={id:"rv"+runState.seq,t:(wf.lineName||"生产线")+" · 自动生成成片",s:"待审核",c:grads[Math.floor(Math.random()*grads.length)],req:reqs[Math.floor(Math.random()*reqs.length)],from:"run",rounds:ctx.rounds||1,backTo:findBackTo(wf,condNode.id),imgUrl:ctx.imgUrl||null};
+  REVIEW.unshift(item);
+  if(!ctx.reviews)ctx.reviews=[];
+  ctx.reviews.push(item.id);
+  return item.id;
+}
+/* 真实 AI 图像生成：fetch 云函数 mode:"image"，30s 超时，失败返回 null */
+async function fetchRealImage(prompt){
+  try{
+    const ctrl=new AbortController(),tm=setTimeout(()=>ctrl.abort(),30000);
+    const res=await fetch(COZE_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"image",prompt}),signal:ctrl.signal});
+    clearTimeout(tm);
+    const d=await res.json();
+    return (d&&d.ok&&d.url)?d.url:null;
+  }catch(e){return null;}
+}
+function isImgNode(n){return /场景生成|AI调色|智能抠图|生成场景/i.test((n.skill||"")+(n.title||""));}
+async function startRun(){
+  if(!currentWF){alert("请先在「生产线」页生成工作流，再点运行");return;}
+  if(runState.running){alert("已有流程在运行或等待审片，请先处理");return;}
+  runState.running=true;
+  document.getElementById("runBtn").style.display="none";
+  document.getElementById("stopBtn").style.display="";
+  document.querySelectorAll(".node-rect").forEach(x=>x.classList.remove("node-done","node-rework","node-exec"));
+  const wf=currentWF,order=topoOrder(wf);
+  const ctx={order,idx:-1,wf,reviews:[],cost:0,rounds:1,logs:["["+nowStr()+"] ▶ 开始运行："+wf.lineName]};
+  setRunStatus("⚙️ 运行中 · 按拓扑顺序执行节点…","busy");
+  const ok=await runSegment(order,0,order.length-1,wf,ctx);
+  if(ok)finishRun(wf,ctx);
+  else if(!runState.running){stopRunUI();}
+}
+function stopRun(){runState.running=false;stopRunUI();setRunStatus("⏹ 已停止","");}
+function stopRunUI(){document.getElementById("runBtn").style.display="";document.getElementById("stopBtn").style.display="none";}
+async function continueRun(){
+  const p=runState.pending;if(!p)return;
+  runState.running=true;
+  setRunStatus("✔ 审核通过 · 继续执行后续节点…","busy");
+  const ok=await runSegment(p.order,p.idx+1,p.order.length-1,p.wf,p);
+  if(ok)finishRun(p.wf,p);
+}
+async function rerunSegment(){
+  const p=runState.pending;if(!p)return;
+  runState.running=true;
+  const wf=p.wf,order=p.order;
+  const backIdx=order.indexOf(p.backTo);
+  const startIdx=backIdx>=0?backIdx:0;
+  const g=document.getElementById("node-"+p.backTo);
+  if(g){g.classList.add("node-rework");setTimeout(()=>g.classList.remove("node-rework"),2200);}
+  setRunStatus("↩ 已打回 · 从「"+(wf.nodes.find(n=>n.id===p.backTo)||{}).title+"」重做…","busy");
+  const ctx=Object.assign({},p,{rounds:(p.rounds||1)+1});
+  ctx.logs.push("["+nowStr()+"] ↩ 审片打回 → 回到节点「"+((wf.nodes.find(n=>n.id===p.backTo))||{}).title+"」重做");
+  const ok=await runSegment(order,startIdx,p.idx,wf,ctx);
+  if(ok)finishRun(wf,ctx);
+}
+function finishRun(wf,ctx){
+  runState.running=false;
+  stopRunUI();
+  const logs=ctx.logs||[];
+  if(selectedAssets.length)logs.push("["+nowStr()+"] 📦 本次运行使用素材："+selectedAssets.join("、"));
+  const pubNodes=wf.nodes.filter(n=>/发布|推送|分发/i.test((n.title||"")+(n.skill||"")));
+  if(pubNodes.length){
+    const chs=CHANNELS.filter(c=>c.on).map(c=>c.n);
+    logs.push("["+nowStr()+"] 📮 "+pubNodes[0].title+" → "+(chs.length?chs.join(" + "):"（未连接渠道，已跳过）")+" OK");
+  }
+  const revCount=ctx.reviews?ctx.reviews.length:0;
+  logs.push("["+nowStr()+"] ✔ 运行结束"+(revCount?("（"+revCount+" 次审片 · "):"（")+"消耗 ¥"+ctx.cost.toFixed(2)+"）");
+  DELIV.unshift({c:wf.lineName+" · 自动交付",t:"闭环产出",p:100,s:"已交付",st:"p-teal",imgUrl:ctx.imgUrl||null});
+  runState.seq++;
+  const durMin=1+Math.floor(Math.random()*4),durSec=Math.floor(Math.random()*60);
+  RUNS.unshift({id:"RUN-"+Math.floor(2042+Math.random()*800),nm:wf.lineName,st:"成功",cls:"p-teal",time:nowStr().slice(0,16),dur:durMin+"m"+String(durSec).padStart(2,"0")+"s",cost:"¥"+ctx.cost.toFixed(2),nodes:wf.nodes.length,logs});
+  refreshStats();renderDeliv();renderRuns();
+  setRunStatus("✔ 运行成功 · 产出已交付（审片台 / 交付管理 / 运行记录可查）","");
+}
+function reviewPass(id){
+  const r=REVIEW.find(x=>x.id===id);
+  if(!r)return;
+  r.s="已通过";
+  const pend=runState.pending;
+  if(pend&&pend.reviewId===id){pend.reviewId=null;renderReview();setTimeout(continueRun,400);}
+  else{renderReview();renderDeliv();setRunStatus("✔ 已通过","");}
+}
+function reviewReject(id){
+  const r=REVIEW.find(x=>x.id===id);
+  if(!r)return;
+  r.s="已打回重做";
+  r.rounds=(r.rounds||1)+1;
+  const pend=runState.pending;
+  if(pend&&pend.reviewId===id){
+    pend.reviewId=null;pend.backTo=r.backTo;
+    renderReview();
+    setTimeout(rerunSegment,500);
+  }else{renderReview();setRunStatus("↩ 已打回重做","warn");}
+}
+function refreshStats(){
+  const qs=document.querySelectorAll("#view-home .stat .n");
+  if(qs.length!==4)return;
+  const active=RUNS.filter(r=>r.st==="运行中"||r.st==="待审片").length;
+  const total=Math.max(1,RUNS.length);
+  const ok=RUNS.filter(r=>r.st==="成功").length;
+  const cost=RUNS.reduce((s,r)=>s+parseFloat(String(r.cost||"0").replace("¥","")||0),0);
+  qs[0].textContent=active;
+  qs[1].textContent=(total*12).toLocaleString();
+  qs[2].textContent=(ok/total*100).toFixed(1)+"%";
+  qs[3].textContent=8;
+}
+/* init 后刷新统计 */
+setTimeout(refreshStats,200);
+
+/* ============ 自定义 Skill：调试 & 发布 ============ */
+function runDebug(){
+  document.getElementById("dbgOut").textContent='{ "transparent_png":"iVBORw0KG...", "width":1024, "height":1024 }';
+  document.getElementById("dbgOut").style.color="#0F6E56";
+}
+function openPublish(){document.getElementById("mask").classList.add("show");
+  ["c1","c2","c3","c4","c5"].forEach(id=>document.getElementById(id).classList.remove("ok"));}
+function closePublish(){document.getElementById("mask").classList.remove("show");}
+function finishPublish(){
+  const ids=["c1","c2","c3","c4","c5"];let i=0;
+  const t=setInterval(()=>{document.getElementById(ids[i]).classList.add("ok");i++;
+    if(i>=ids.length){clearInterval(t);setTimeout(()=>{alert("发布成功：Skill「商品图智能抠图」已上架能力池，所有引用它的生产线将自动更新。");closePublish();},400);}},450);
+}
+
+/* init */
+renderSkillLib();
+renderReview();
+renderRuns();
+renderBrand();
+</script>
+</body>
+</html>
